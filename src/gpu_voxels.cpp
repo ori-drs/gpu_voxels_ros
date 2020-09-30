@@ -42,7 +42,7 @@ class Master {
       exit(EXIT_SUCCESS);
     }
 
-    void pointcloud_callback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg)
+    void PointcloudCallback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg)
     {
       std::vector<Vector3f> point_data;
       point_data.resize(msg->points.size());
@@ -154,7 +154,7 @@ class Master {
       
       ros::init(argc, argv, "distance_ros_demo");
       ros::NodeHandle nh;
-      ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZ> >(point_cloud_topic, 1, pointcloud_callback);
+      ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZ> >(point_cloud_topic, 1, PointcloudCallback);
 
       ros::Rate r(30);
       size_t iteration = 0;

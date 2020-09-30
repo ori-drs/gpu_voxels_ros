@@ -86,7 +86,7 @@ void killhandler(int)
  *
  * NOTE: could also use msg->frame_id to derive the transform to world coordinates through ROS
  */
-void pointcloud_callback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg)
+void PointcloudCallback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg)
 {
   std::vector<Vector3f> point_data;
   point_data.resize(msg->points.size());
@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
 
   ros::init(argc, argv, "distance_ros_demo");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZ> >(point_cloud_topic, 1, pointcloud_callback);
+  ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZ> >(point_cloud_topic, 1, PointcloudCallback);
 
   //Vis Helper
   gvl->addPrimitives(primitive_array::ePRIM_SPHERE, "measurementPoints");

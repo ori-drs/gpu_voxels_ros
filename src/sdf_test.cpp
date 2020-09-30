@@ -4,13 +4,6 @@
 #include <gpu_voxels/GpuVoxels.h>
 #include <gpu_voxels/helpers/GeometryGeneration.h>
 #include <fstream>
-// #include <ros/ros.h>
-// #include <pcl_ros/point_cloud.h>
-// #include <pcl/point_types.h>
-// #include <icl_core_config/Config.h>
-
-// #include <chrono>
-// #include <string>
 
 using namespace gpu_voxels;
 using boost::shared_ptr;
@@ -57,11 +50,6 @@ int main(int argc, char* argv[])
     pba_inverse_dist_map->parallelBanding3D();
     HANDLE_CUDA_ERROR(cudaDeviceSynchronize());
 
-
-    // Calculate the signed distance
-    std::vector<float> sdf_map(pba_dist_map->getVoxelMapSize());
-    pba_dist_map->getSignedDistancesToHost(pba_inverse_dist_map, sdf_map);
-    
     // Calculate SDF and Gradients
     pba_dist_map->getSignedDistancesAndGradientsToHost(pba_inverse_dist_map, sdf_grad_map);
     std::cout << "...Signed distance field and gradients done" << std::endl;
@@ -86,7 +74,6 @@ int main(int argc, char* argv[])
                 std::string el;
                 getline(ss, el, ',');
                 MyArray[col][row][z] = std::stof(el);
-                // std::cout << el << std::endl;
                 test_vec.push_back(std::stof(el));
             }
         }
@@ -104,12 +91,8 @@ int main(int argc, char* argv[])
 
         if (voxel_coords.x > 0 && voxel_coords.x < dimX-1 && voxel_coords.y > 0 && voxel_coords.y < dimY-1 && voxel_coords.z > 0 && voxel_coords.z < dimZ-1){
             std::cout << "x: " << voxel_coords.x << "  y: " << voxel_coords.y << "  z: " << voxel_coords.z << "        "; // This is the sdf element
-            // std::cout << "My sdf: " << sdf_grad_map[i].sdf << "      "<< std::endl; // This is the sdf element
-            // std::cout << "My sdf: " << sdf_map[i]; // This is the sdf element
-            std::cout << "My sdf: " << sdf_grad_map[i].sdf; // This is the sdf element
             std::cout << "   My Gradient: " << sdf_grad_map[i].x << "   " << sdf_grad_map[i].y << "   " << sdf_grad_map[i].z << std::endl;
 
-            // std::cout << "   Matlab: " << MyArray[voxel_coords.x][voxel_coords.y][voxel_coords.z] << std::endl;
         }
     }
     

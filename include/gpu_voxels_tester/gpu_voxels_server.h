@@ -19,8 +19,11 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <icl_core_config/Config.h>
+#include "tf/transform_datatypes.h"
+#include "tf/LinearMath/Quaternion.h"
 
 #include <chrono>
+#include <Eigen/Eigen>
 
 using boost::dynamic_pointer_cast;
 // using boost::shared_ptr;
@@ -33,13 +36,17 @@ namespace gpu_voxels_tester{
   class GPUVoxelsServer {
 
     public:
-      GPUVoxelsServer(ros::NodeHandle node);
+      GPUVoxelsServer(ros::NodeHandle& node);
       ~GPUVoxelsServer();
 
-      void pointcloud_callback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg);
+      void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
+      void PointcloudCallback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg);
+      // void PointcloudCallback(const sensor_msgs::PointCloud2ConstPtr & msg);
+      double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad);
+      double GetDistance(const Eigen::Vector3d &pos);
 
     private:
-      ros::Subscriber pcl_sub_;
+      ros::Subscriber pcl_sub_, transform_sub_;
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
       boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_;
@@ -48,20 +55,25 @@ namespace gpu_voxels_tester{
       float voxel_side_length_ = 0.01f; // 1 cm voxel size
       bool new_data_received_;
       Vector3ui map_dimensions_ = Vector3ui(256, 256, 256);
-      const Vector3f camera_offsets_ = Vector3f(map_dimensions_.x * voxel_side_length_ * 0.5f, 
-                                          -0.2f, 
-                                          map_dimensions_.z * voxel_side_length_ * 0.5f); // camera located at y=-0.2m, x_max/2, z_max/2 
+      // Vector3f camera_offsets_ = Vector3f(map_dimensions_.x * voxel_side_length_ * 0.5f, 
+      //                                     -0.2f, 
+      //                                     map_dimensions_.z * voxel_side_length_ * 0.5f); // camera located at y=-0.2m, x_max/2, z_max/2 
+      // Vector3f camera_offsets_;
 
       PointCloud my_point_cloud_;
 
 
-      float roll_ = 0;
-      float pitch_ = 0;
-      float yaw_ = 0;
-      Matrix4f tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(-3.14/2.0 + roll_, 0 + pitch_, 0 + yaw_), camera_offsets_);
+      // float roll_ = 0;
+      // float pitch_ = 0;
+      // float yaw_ = 0;
+      Matrix4f tf_;
+
+      // Matrix4f tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(-3.14/2.0 + roll_, 0 + pitch_, 0 + yaw_), camera_offsets_);
 
       int filter_threshold_ = 0;
       float erode_threshold_ = 0.0f;
+
+      std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
 
   };
 } // namespace
