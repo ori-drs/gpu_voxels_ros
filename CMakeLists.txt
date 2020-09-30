@@ -15,6 +15,8 @@ FIND_PACKAGE(PCL REQUIRED)
 FIND_PACKAGE(orocos_kdl REQUIRED)
 FIND_PACKAGE(roscpp REQUIRED)
 FIND_PACKAGE(rospy REQUIRED)
+FIND_PACKAGE(Eigen3 REQUIRED)
+set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 
 find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs)
 
@@ -49,6 +51,7 @@ include_directories(
     ${orocos_kdl_INCLUDE_DIRS}
     ${roscpp_INCLUDE_DIRS}
     ${rospy_INCLUDE_DIRS}
+    ${Eigen3_INCLUDE_DIRS}
 )
 
 
