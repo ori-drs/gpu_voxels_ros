@@ -41,7 +41,7 @@ namespace gpu_voxels_tester{
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg);
-      // void PointcloudCallback(const sensor_msgs::PointCloud2ConstPtr & msg);
+
       double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad);
       double GetDistance(const Eigen::Vector3d &pos);
 
@@ -49,7 +49,7 @@ namespace gpu_voxels_tester{
       ros::Subscriber pcl_sub_, transform_sub_;
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
-      boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_;
+      boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_;
       boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
 
       float voxel_side_length_ = 0.01f; // 1 cm voxel size
@@ -61,7 +61,7 @@ namespace gpu_voxels_tester{
       // Vector3f camera_offsets_;
 
       PointCloud my_point_cloud_;
-
+      Vector3f camera_pos_;
 
       // float roll_ = 0;
       // float pitch_ = 0;

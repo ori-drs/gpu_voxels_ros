@@ -16,8 +16,8 @@ namespace gpu_voxels_tester{
   GPUVoxelsServer::GPUVoxelsServer(ros::NodeHandle& node) {
 
     // std::string point_cloud_topic = "/hsrb/head_rgbd_sensor/depth_registered/points";
-    pcl_sub_ = node.subscribe<pcl::PointCloud<pcl::PointXYZ> >("/hsrb/head_rgbd_sensor/depth_registered/points", 1, &GPUVoxelsServer::PointcloudCallback, this);
     transform_sub_ = node.subscribe("/camera_pose", 10, &GPUVoxelsServer::PoseCallback, this);
+    pcl_sub_ = node.subscribe<pcl::PointCloud<pcl::PointXYZ> >("/hsrb/head_rgbd_sensor/depth_registered/points", 1, &GPUVoxelsServer::PointcloudCallback, this);
 
     // Generate a GPU-Voxels instance:
     gvl_ = gpu_voxels::GpuVoxels::getInstance();
@@ -25,28 +25,33 @@ namespace gpu_voxels_tester{
 
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmap");
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaInverseDistanceVoxmap");
-    gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap1");
-    gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap2");
-    gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelList");
-    gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelListFiltered");
+    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap1");
+    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap2");
+    gvl_->addMap(MT_PROBAB_VOXELMAP, "maintainedProbVoxmap");
+    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelList");
+    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelListFiltered");
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmapVisual");
 
     pbaDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmap"));
     pbaInverseDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaInverseDistanceVoxmap"));
-    erodeTempVoxmap1_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap1"));
-    erodeTempVoxmap2_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap2"));
-    countingVoxelList_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelList"));
-    countingVoxelListFiltered_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelListFiltered"));
+    // erodeTempVoxmap1_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap1"));
+    // erodeTempVoxmap2_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap2"));
+    maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
+    // countingVoxelList_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelList"));
+    // countingVoxelListFiltered_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelListFiltered"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
 
     sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
 
-    new_data_received_ = true; // call visualize on the first iteration
+    // new_data_received_ = true; // call visualize on the first iteration
+    maintainedProbVoxmap_->clearMap();
+
   }
 
   void GPUVoxelsServer::PointcloudCallback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg)
   {
     std::cout << "PointcloudCallback..." << std::endl;
+    auto start = std::chrono::high_resolution_clock::now(); 
 
     std::vector<Vector3f> point_data;
     point_data.resize(msg->points.size());
@@ -58,46 +63,44 @@ namespace gpu_voxels_tester{
       point_data[i].z = msg->points[i].z;
     }
 
-    //my_point_cloud.add(point_data);
     my_point_cloud_.update(point_data);
     
-    // Vector3f pos(map_dimensions_.x * voxel_side_length_ * 0.5f, -0.2f, map_dimensions_.z * voxel_side_length_ * 0.5f); // camera located at y=-0.2m, x_max/2, z_max/2
-
-    // float roll = 0.0;
-    // float pitch = 0.0;
-    // float yaw = 0.0;
-
-    // tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(-3.14/2.0 + roll, 0 + pitch, 0 + yaw), pos);
-
-
     // transform new pointcloud to world coordinates
     my_point_cloud_.transformSelf(&tf_);
     
-    new_data_received_ = true;
+    // new_data_received_ = true;
 
     // ------------------------------------------------------ Not in original
 
     pbaDistanceVoxmap_->clearMap();
     pbaInverseDistanceVoxmap_->clearMap();
-    countingVoxelList_->clearMap();
-    countingVoxelListFiltered_->clearMap();
-    erodeTempVoxmap1_->clearMap();
-    erodeTempVoxmap2_->clearMap();
+    // countingVoxelList_->clearMap();
+    // countingVoxelListFiltered_->clearMap();
+    // erodeTempVoxmap1_->clearMap();
+    // erodeTempVoxmap2_->clearMap();
 
-    countingVoxelList_->insertPointCloud(my_point_cloud_, eBVM_OCCUPIED);
-    countingVoxelListFiltered_->merge(countingVoxelList_);
-    countingVoxelListFiltered_->remove_underpopulated(filter_threshold_);
+    // countingVoxelList_->insertPointCloud(my_point_cloud_, eBVM_OCCUPIED);
+    // countingVoxelListFiltered_->merge(countingVoxelList_);
 
-    erodeTempVoxmap1_->merge(countingVoxelListFiltered_);
-    if (erode_threshold_ > 0)
-    {
-      erodeTempVoxmap1_->erodeInto(*erodeTempVoxmap2_, erode_threshold_);
-    } else
-    {
-      erodeTempVoxmap1_->erodeLonelyInto(*erodeTempVoxmap2_); //erode only "lonely voxels" without occupied neighbors
-    }
-    pbaDistanceVoxmap_->mergeOccupied(erodeTempVoxmap2_);
-    pbaInverseDistanceVoxmap_->mergeFree(erodeTempVoxmap2_);
+    // // This removes voxels which don't enough points corresponding to the voxel
+    // countingVoxelListFiltered_->remove_underpopulated(filter_threshold_);
+
+    // erodeTempVoxmap1_->merge(countingVoxelListFiltered_);
+    // if (erode_threshold_ > 0)
+    // {
+    //   erodeTempVoxmap1_->erodeInto(*erodeTempVoxmap2_, erode_threshold_);
+    // } else
+    // {
+    //   erodeTempVoxmap1_->erodeLonelyInto(*erodeTempVoxmap2_); //erode only "lonely voxels" without occupied neighbors
+    // }
+
+    maintainedProbVoxmap_->insertSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos_, true, false, eBVM_OCCUPIED, NULL);
+
+    // This does a final check of occupancy threshold before inserting
+    // pbaDistanceVoxmap_->mergeOccupied(erodeTempVoxmap2_);
+    // pbaInverseDistanceVoxmap_->mergeFree(erodeTempVoxmap2_);
+    pbaDistanceVoxmap_->mergeOccupied(maintainedProbVoxmap_);
+    pbaInverseDistanceVoxmap_->mergeFree(maintainedProbVoxmap_);
 
     // Calculate the distance map:
     pbaDistanceVoxmap_->parallelBanding3D();
@@ -107,10 +110,14 @@ namespace gpu_voxels_tester{
 
     // std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map(pbaDistanceVoxmap_->getVoxelMapSize());
     pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
+    auto finish = std::chrono::high_resolution_clock::now(); 
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(finish - start); 
+    double dur = duration.count();
+    std::cout << "Callback time calculation time: " <<  dur << " microseconds." << std::endl;
 
     pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
 
-    gvl_->visualizeMap("pbaDistanceVoxmap");
+    gvl_->visualizeMap("pbaDistanceVoxmapVisual");
     std::cout << "New visual available..." << std::endl;
 
   }
@@ -151,7 +158,7 @@ namespace gpu_voxels_tester{
     //             msg->transform.translation.y,
     //             msg->transform.translation.z);
 
-    Vector3f pos(1.2f,
+    camera_pos_ = Vector3f(1.2f,
                 1.2f,
                 map_dimensions_.z * voxel_side_length_ * 0.5f);
 
@@ -164,7 +171,7 @@ namespace gpu_voxels_tester{
     tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
     std::cout << "roll: " << roll << "pitch: " << pitch << "yaw: " << yaw << std::endl;
 
-    tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(0 + roll, 0 + pitch, 0 + yaw), pos);
+    tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(0 + roll, 0 + pitch, 0 + yaw), camera_pos_);
     // tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(-3.14/2.0 + roll, 0 + pitch, 0 + yaw), pos);
 
   }
