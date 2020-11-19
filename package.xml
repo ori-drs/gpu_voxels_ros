@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>gpu_voxels_tester</name>
+  <name>gpu_voxels_ros</name>
   <version>0.0.0</version>
-  <description>The gpu_voxels_tester package</description>
+  <description>The gpu_voxels_ros package</description>
 
-  <maintainer email="mfinean@robots.ox.ac.uk.todo">Mark Finean</maintainer>
+  <maintainer email="mfinean@robots.ox.ac.uk">Mark Finean</maintainer>
 
   <license>TODO</license>
 

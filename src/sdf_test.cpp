@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 
     // Load known txt file
     std::vector<float> ReplayBuffer;
-    std::ifstream in("/home/mark/code/sdf_package_testing/src/gpu_voxels_tester/src/gpu_voxels_test.txt");
+    std::ifstream in("/home/mark/code/sdf_package_testing/src/gpu_voxels_ros/src/gpu_voxels_test.txt");
     float MyArray[dimX][dimY][dimZ];
     std::vector<float> test_vec;
     for (size_t z = 0; z < dimZ; z++)

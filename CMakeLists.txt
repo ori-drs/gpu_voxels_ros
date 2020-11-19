@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(gpu_voxels_tester)
+project(gpu_voxels_ros)
 
 # Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -23,11 +23,16 @@ find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs)
 
 # Must be called before adding libraries
 catkin_package(     INCLUDE_DIRS include
-                    LIBRARIES gpu_voxels_tester
+                    LIBRARIES gpu_voxels_ros
 )
 
-add_library(gpu_voxels_tester SHARED src/gpu_voxels_server.cpp)
-target_link_libraries(gpu_voxels_tester 
+add_library(gpu_voxels_ros  
+src/gpu_voxels_server.cpp
+# include/timing.h
+src/timing.cc
+)
+
+target_link_libraries(gpu_voxels_ros 
     ${Boost_SYSTEM_LIBRARY}
     ${icl_core_LIBRARIES}
     ${gpu_voxels_LIBRARIES}
@@ -60,34 +65,6 @@ add_definitions(
 )
 
 
-add_executable (mark_test src/mark_test.cpp)
-target_link_libraries (mark_test
-    ${Boost_SYSTEM_LIBRARY}
-    ${icl_core_LIBRARIES}
-    ${gpu_voxels_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${PCL_LIBRARIES}
-    ${CATKIN_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
-    ${roscpp_LIBRARIES}
-    ${rospy_LIBRARIES}
-
-)
-
-add_executable (mark_simple_test src/mark_simple_test.cpp)
-target_link_libraries (mark_simple_test
-    ${Boost_SYSTEM_LIBRARY}
-    ${icl_core_LIBRARIES}
-    ${gpu_voxels_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${PCL_LIBRARIES}
-    ${CATKIN_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
-    ${roscpp_LIBRARIES}
-    ${rospy_LIBRARIES}
-
-)
-
 add_executable (sdf_test src/sdf_test.cpp)
 target_link_libraries (sdf_test
     ${Boost_SYSTEM_LIBRARY}
@@ -101,50 +78,23 @@ target_link_libraries (sdf_test
     ${rospy_LIBRARIES}
 )
 
-#add_executable (gpu_voxels src/gpu_voxels.cpp)
-## Link the executable to the library.
-## We currently also have to link against Boost and icl_core...
-#target_link_libraries (gpu_voxels
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${icl_core_LIBRARIES}
-#    ${gpu_voxels_LIBRARIES}
-#    ${CUDA_LIBRARIES}
-#    ${PCL_LIBRARIES}
-#    ${CATKIN_LIBRARIES}
-#    ${orocos_kdl_LIBRARIES}
-#    ${roscpp_LIBRARIES}
-#    ${rospy_LIBRARIES}
-#
-#)
 
-# add_executable (distance_ros_demo src/DistanceROSDemo.cpp)
-# # Link the executable to the library.
-# # We currently also have to link against Boost and icl_core...
-# target_link_libraries (distance_ros_demo
-#     ${Boost_SYSTEM_LIBRARY}
-#     ${icl_core_LIBRARIES}
-#     ${gpu_voxels_LIBRARIES}
-#     ${CUDA_LIBRARIES}
-#     ${PCL_LIBRARIES}
-#     ${CATKIN_LIBRARIES}
-#     ${orocos_kdl_LIBRARIES}
-#     ${roscpp_LIBRARIES}
-#     ${rospy_LIBRARIES}
-
-# )
+add_executable (gpu_voxels_server_node src/gpu_voxels_server_node.cpp)
+target_link_libraries (gpu_voxels_server_node
+    ${Boost_SYSTEM_LIBRARY}
+    ${icl_core_LIBRARIES}
+    ${gpu_voxels_LIBRARIES}
+    ${CUDA_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${CATKIN_LIBRARIES}
+    ${orocos_kdl_LIBRARIES}
+    ${roscpp_LIBRARIES}
+    ${rospy_LIBRARIES}
+    gpu_voxels_ros
+)
 
 
-# add_executable(gpu_voxels_server_node
-#   src/gpu_voxels_server_node.cpp
-# )
-# target_link_libraries(gpu_voxels_server_node 
-#     ${roscpp_LIBRARIES}
-# )
-
-
-
-
-install(TARGETS gpu_voxels_tester
+install(TARGETS gpu_voxels_ros
 ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})

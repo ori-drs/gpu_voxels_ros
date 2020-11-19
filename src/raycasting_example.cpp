@@ -226,11 +226,9 @@ int main(int argc, char* argv[])
 
       // Insert the CAMERA data (now in world coordinates) into the list
       countingVoxelList->insertPointCloud(my_point_cloud, eBVM_OCCUPIED);
-      // gvl->visualizeMap("countingVoxelList");
 
       countingVoxelListFiltered->merge(countingVoxelList);
       countingVoxelListFiltered->remove_underpopulated(filter_threshold);
-      // gvl->visualizeMap("countingVoxelListFiltered");
 
       LOGGING_INFO(Gpu_voxels, "erode voxels into pbaDistanceVoxmap" << endl);
       erodeTempVoxmap1->merge(countingVoxelListFiltered);
@@ -241,6 +239,7 @@ int main(int argc, char* argv[])
       {
         erodeTempVoxmap1->erodeLonelyInto(*erodeTempVoxmap2); //erode only "lonely voxels" without occupied neighbors
       }
+      
       pbaDistanceVoxmap->mergeOccupied(erodeTempVoxmap2);
       pbaInverseDistanceVoxmap->mergeFree(erodeTempVoxmap2);
 
