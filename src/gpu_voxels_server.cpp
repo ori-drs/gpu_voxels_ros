@@ -68,6 +68,7 @@ namespace gpu_voxels_ros{
 
     // std::cout << "CallbackSync..." << std::endl;
     // auto start = std::chrono::high_resolution_clock::now(); 
+    timing::Timer sync_callback_timer("CallbackSync");
 
     ros::Time pcl_time;
     double time_delay = 3e-3;
@@ -104,7 +105,7 @@ namespace gpu_voxels_ros{
               continue;
         }
 
-        Vector3f camera_pos = Vector3f(sync_tf_.a14, sync_tf_.a24, sync_tf_.a34);
+        Vector3f camera_pos = Vector3f(sync_tf_.a14, sync_tf_.a24, sync_tf_.a34)/sync_tf_.a44;
 
         update_transform_timer.Stop();
 
@@ -183,6 +184,7 @@ namespace gpu_voxels_ros{
         pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
         // pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
         transfer_timer.Stop();
+        sync_callback_timer.Stop();
         // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
         pointcloud_queue_.pop();
 
@@ -213,6 +215,9 @@ namespace gpu_voxels_ros{
     
     // std::cout << "requesting GetDistanceAndGradient..." << std::endl;
     // std::cout << "input pos    x: " << pos[0] << " y: " << pos[1] << " z: " << pos[2] << std::endl;
+    
+    // Check that the point is int bounds
+
     gpu_voxels::Vector3ui coords = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, gpu_voxels::Vector3f(pos[0], pos[1], pos[2]));
     uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, coords);
     // std::cout << "accessing index: " << lin_ind << std::endl;
