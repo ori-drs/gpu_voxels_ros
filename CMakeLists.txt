@@ -28,6 +28,8 @@ catkin_package(     INCLUDE_DIRS include
 
 add_library(gpu_voxels_ros  
 src/gpu_voxels_server.cpp
+src/gpu_voxels_signed_server.cpp
+src/gpu_voxels_hsr_server.cpp
 # include/timing.h
 src/timing.cc
 )
@@ -65,6 +67,19 @@ add_definitions(
 )
 
 
+# add_executable (load_cow_and_lady_ptcloud src/load_cow_and_lady_ptcloud.cpp)
+# target_link_libraries (load_cow_and_lady_ptcloud
+#     ${Boost_SYSTEM_LIBRARY}
+#     ${icl_core_LIBRARIES}
+#     ${gpu_voxels_LIBRARIES}
+#     ${CUDA_LIBRARIES}
+#     ${PCL_LIBRARIES}
+#     ${CATKIN_LIBRARIES}
+#     ${orocos_kdl_LIBRARIES}
+#     ${roscpp_LIBRARIES}
+#     ${rospy_LIBRARIES}
+# )
+
 add_executable (sdf_test src/sdf_test.cpp)
 target_link_libraries (sdf_test
     ${Boost_SYSTEM_LIBRARY}
@@ -93,6 +108,19 @@ target_link_libraries (gpu_voxels_server_node
     gpu_voxels_ros
 )
 
+add_executable (gpu_voxels_signed_server_node src/gpu_voxels_signed_server_node.cpp)
+target_link_libraries (gpu_voxels_signed_server_node
+    ${Boost_SYSTEM_LIBRARY}
+    ${icl_core_LIBRARIES}
+    ${gpu_voxels_LIBRARIES}
+    ${CUDA_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${CATKIN_LIBRARIES}
+    ${orocos_kdl_LIBRARIES}
+    ${roscpp_LIBRARIES}
+    ${rospy_LIBRARIES}
+    gpu_voxels_ros
+)
 
 install(TARGETS gpu_voxels_ros
 ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

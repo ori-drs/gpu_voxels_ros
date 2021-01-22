@@ -9,8 +9,8 @@
  * \date    2016-12-24
  */
 //----------------------------------------------------------------------
-#ifndef GPU_VOXELS_ROS_SERVER_H
-#define GPU_VOXELS_ROS_SERVER_H
+#ifndef GPU_VOXELS_ROS_SIGNED_SERVER_H
+#define GPU_VOXELS_ROS_SIGNED_SERVER_H
 
 #include <cstdlib>
 #include <signal.h>
@@ -33,14 +33,16 @@ using boost::dynamic_pointer_cast;
 using gpu_voxels::voxelmap::ProbVoxelMap;
 using gpu_voxels::voxelmap::DistanceVoxelMap;
 using gpu_voxels::voxellist::CountingVoxelList;
+using gpu_voxels::voxelmap::SignedDistanceVoxelMap;
+using gpu_voxels::voxelmap::InheritSignedDistanceVoxelMap;
 
 namespace gpu_voxels_ros{
 
-  class GPUVoxelsServer {
+  class GPUVoxelsSignedServer {
 
     public:
-      GPUVoxelsServer(ros::NodeHandle& node);
-      ~GPUVoxelsServer();
+      GPUVoxelsSignedServer(ros::NodeHandle& node);
+      ~GPUVoxelsSignedServer();
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
@@ -48,21 +50,30 @@ namespace gpu_voxels_ros{
       double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad);
       double GetDistance(const Eigen::Vector3d &pos);
       void CallbackSync();
+      void SaveSDFToFile(const std::string filepath);
+      void SaveOccupancyToFile(const std::string filepath);
 
     private:
       ros::Subscriber pcl_sub_, transform_sub_;
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
+      boost::shared_ptr<InheritSignedDistanceVoxelMap> signedDistanceMap_;
+
       boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_;
       boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
 
-      // float voxel_side_length_ = 0.05f; // 1 cm voxel size
-      float voxel_side_length_ = 0.4f; // 1 cm voxel size
+      // InheritSignedDistanceVoxelMap* signedDistanceMap_;
+
+      float voxel_side_length_ = 0.05f; 
+      // float voxel_side_length_ = 0.4f; 
       bool new_data_received_;
-      // Vector3ui map_dimensions_ = Vector3ui(448, 448, 128);
-      Vector3ui map_dimensions_ = Vector3ui(64, 64, 16);
+      Vector3ui map_dimensions_ = Vector3ui(448, 448, 128);
+      // Vector3ui map_dimensions_ = Vector3ui(64, 64, 16);
       PointCloud my_point_cloud_;
       // Vector3f camera_pos_;
+
+      float min_ray_length = 0.4;
+      float max_ray_length = 4.0;
 
       pcl::PointCloud<pcl::PointXYZ> cloud_;
 
@@ -78,6 +89,7 @@ namespace gpu_voxels_ros{
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;
+      std::vector<int> occupancy_map_;
  
   };
 } // namespace
