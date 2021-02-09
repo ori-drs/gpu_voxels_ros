@@ -50,17 +50,22 @@ namespace gpu_voxels_ros{
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
-      double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad);
-      double GetDistance(const Eigen::Vector3d &pos);
+      double QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const;
+      double GetTrilinearDistance(const Eigen::Vector3d &pos) const;
+      double GetTrilinearDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const;
+
+      double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const;
+      double GetDistance(const Eigen::Vector3d &pos) const;
       void CallbackSync();
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
-      void publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_);
-      void publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_);
-      void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_);
+      void publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
+      void publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
+      void publishRVIZGroundSDF(const std::vector<float> &sdf_map);
+      void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
 
     private:
       ros::NodeHandle node_;

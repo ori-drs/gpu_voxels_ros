@@ -194,8 +194,11 @@ namespace gpu_voxels_ros{
         // signedDistanceMap_->getSignedDistancesToHost(sdf_map_);
         // pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
         // pbaDistanceVoxmap_->getOccupancyToHost(occupancy_map_);
-        pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
-        // pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
+
+
+
+        // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
+        pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
         // std::cout << "Found gradients and SDF" << std::endl;
 
         transfer_timer.Stop();
@@ -206,14 +209,16 @@ namespace gpu_voxels_ros{
         // pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
         // gvl_->visualizeMap("pbaDistanceVoxmapVisual");        
         
-        publishRVIZOccupancy(sdf_grad_map_);
-        publishRVIZGroundSDF(sdf_grad_map_);
-        // publishRVIZOccupancy(sdf_map_);
+        // publishRVIZOccupancy(sdf_grad_map_);
+        // publishRVIZGroundSDF(sdf_grad_map_);
+
+        publishRVIZGroundSDF(sdf_map_);
+        publishRVIZOccupancy(sdf_map_);
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
 
     }
-    publishRVIZGroundSDFGrad(sdf_grad_map_);
+    // publishRVIZGroundSDFGrad(sdf_grad_map_);
   }
 
   void GPUVoxelsHSRServer::publishRVIZOccupancy(const std::vector<int> &occupancy_map) {
@@ -274,7 +279,7 @@ namespace gpu_voxels_ros{
     map_pub_.publish(cloud_msg);
   }
 
-  void GPUVoxelsHSRServer::publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_) {
+  void GPUVoxelsHSRServer::publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -282,7 +287,7 @@ namespace gpu_voxels_ros{
       for (size_t y = 0; y < map_dimensions_.y; ++y)
         for (size_t z = 0; z < map_dimensions_.z; ++z) {
           size_t ind = z * map_dimensions_.x * map_dimensions_.y + y * map_dimensions_.x + x;
-          if (sdf_grad_map_[ind].sdf <= 0) {
+          if (sdf_grad_map[ind].sdf <= 0) {
             pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
             pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
             pt.z = (float)z * (float) voxel_side_length_;
@@ -303,7 +308,7 @@ namespace gpu_voxels_ros{
     map_pub_.publish(cloud_msg);
   }
 
-  void GPUVoxelsHSRServer::publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_) {
+  void GPUVoxelsHSRServer::publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
   
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
@@ -312,7 +317,7 @@ namespace gpu_voxels_ros{
       for (size_t y = 0; y < map_dimensions_.y; ++y){
           size_t ind = y * map_dimensions_.x + x;
 
-          if (sdf_grad_map_[ind].sdf <= 2.0)
+          if (sdf_grad_map[ind].sdf <= 0.5)
           {            
             pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
             pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
@@ -325,12 +330,12 @@ namespace gpu_voxels_ros{
             cloud.push_back(pt);
           }
 
-          if (sdf_grad_map_[ind].sdf >2.0)
+          if (sdf_grad_map[ind].sdf >0.5)
           {            
             pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
             pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
             pt.z = 0;
-            pt.intensity = 2;
+            pt.intensity = 0.5;
             cloud.push_back(pt);
           }
         }
@@ -347,47 +352,94 @@ namespace gpu_voxels_ros{
 
   }
 
-  void GPUVoxelsHSRServer::publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map_) {
+  void GPUVoxelsHSRServer::publishRVIZGroundSDF(const std::vector<float> &sdf_map) {
+  
+    pcl::PointXYZI pt;
+    pcl::PointCloud<pcl::PointXYZI> cloud;
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x){
+      for (size_t y = 0; y < map_dimensions_.y; ++y){
+          size_t ind = y * map_dimensions_.x + x;
+
+          if (sdf_map[ind] <= 0.5)
+          {            
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = 0;
+            float dist = 1000;
+            for (size_t z = 0; z < map_dimensions_.z; ++z){
+              dist = std::min(dist, sdf_map[ind]);
+            }
+            pt.intensity = dist;
+            cloud.push_back(pt);
+          }
+
+          if (sdf_map[ind] >0.5)
+          {            
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = 0;
+            pt.intensity = 0.5;
+            cloud.push_back(pt);
+          }
+        }
+    }
+    
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "odom";
+    sensor_msgs::PointCloud2 cloud_msg;
+
+    pcl::toROSMsg(cloud, cloud_msg);
+    ground_sdf_pub_.publish(cloud_msg);
+
+  }
+
+  void GPUVoxelsHSRServer::publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
 
     visualization_msgs::MarkerArray marker_array;
     // marker_array.markers.resize(map_dimensions_.x * map_dimensions_.y);
-    marker_array.markers.resize(1);
+    marker_array.markers.resize(36);
 
     // for (size_t x = 0; x < map_dimensions_.x; ++x){
     //   for (size_t y = 0; y < map_dimensions_.y; ++y){
     size_t i = 0;  
-    for (size_t x = 300; x < 301; ++x){
-      for (size_t y = 230; y < 231; ++y){
-        size_t ind = y * map_dimensions_.x + x;
-        
-        tf::Quaternion quaternion = tf::createQuaternionFromYaw(atan2(sdf_grad_map_[ind].x, sdf_grad_map_[ind].y));
+    size_t z = 2;
+    for (size_t x = 290; x < 296; ++x){
+      for (size_t y = 230; y < 236; ++y){
+        // size_t ind = y * map_dimensions_.x + x;
+        size_t ind = z * map_dimensions_.x * map_dimensions_.y + y * map_dimensions_.x + x;
 
+        tf::Quaternion quaternion = tf::createQuaternionFromYaw(atan2( sdf_grad_map[ind].y, sdf_grad_map[ind].x));
+
+        // std::cout << "Arrow " << i<< " \t x: " << sdf_grad_map_[ind].x << " \t y: " << sdf_grad_map_[ind].y << " \t Yaw: " << atan2(sdf_grad_map_[ind].x, sdf_grad_map_[ind].y) << std::endl;
 
         visualization_msgs::Marker marker;
-          // Create a marker  
-          marker.header.frame_id = "odom";
-          marker.id = ind;
-          marker.type = visualization_msgs::Marker::ARROW;
-          marker.action = visualization_msgs::Marker::ADD;
-          marker.scale.x = 0.03;
-          marker.scale.y = 0.01;
-          marker.scale.z = 0.01;
-          marker.pose.orientation.w = quaternion[3];
-          marker.pose.orientation.x = quaternion[0];
-          marker.pose.orientation.y = quaternion[1];
-          marker.pose.orientation.z = quaternion[2];        
-          marker.pose.position.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
-          marker.pose.position.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
-          marker.pose.position.z = 0;
-          marker.ns = "gradient";
-          marker.lifetime = ros::Duration(5);
+        // Create a marker  
+        marker.header.frame_id = "odom";
+        marker.id = ind;
+        marker.type = visualization_msgs::Marker::ARROW;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.scale.x = 0.03;
+        marker.scale.y = 0.01;
+        marker.scale.z = 0.01;
+        marker.pose.orientation.x = quaternion[0];
+        marker.pose.orientation.y = quaternion[1];
+        marker.pose.orientation.z = quaternion[2];        
+        marker.pose.orientation.w = quaternion[3];
+        marker.pose.position.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+        marker.pose.position.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+        marker.pose.position.z = 0;
+        marker.ns = "gradient";
+        marker.lifetime = ros::Duration(5);
 
-          // Points are green
-          marker.color.r = 1.0f;
-          marker.color.a = 1.0;
+        // Points are green
+        marker.color.r = 1.0f;
+        marker.color.a = 1.0;
 
-          marker_array.markers[i] = marker;
-          i++;
+        marker_array.markers[i] = marker;
+        i++;
       }
     }
     ground_sdf_grad_pub_.publish(marker_array);
@@ -401,8 +453,7 @@ namespace gpu_voxels_ros{
     CallbackSync();
   }
 
-  // TODO - Need to add in an offset to account for an origin and negative position values
-  double GPUVoxelsHSRServer::GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad){
+  double GPUVoxelsHSRServer::GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
     // std::cout << "requesting GetDistanceAndGradient..." << std::endl;
     // std::cout << 
     gpu_voxels::Vector3f query_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
@@ -445,8 +496,73 @@ namespace gpu_voxels_ros{
     return sdf_grad_map_[lin_ind].sdf;
   }
 
-  // TODO - I think that this should also use mapToVoxels first
-  double GPUVoxelsHSRServer::GetDistance(const Eigen::Vector3d &pos){
+  double GPUVoxelsHSRServer::GetTrilinearDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
+
+    gpu_voxels::Vector3f map_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
+                                  pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
+                                  pos[2]);
+
+
+    map_pos.z = std::max((float) 0, map_pos.z);
+    
+    if( (float) map_pos.x < 0.0 || (float) map_pos.x >= (float) map_dimensions_.x * voxel_side_length_|| 
+        (float) map_pos.y < 0.0 || (float) map_pos.y >= (float) map_dimensions_.y * voxel_side_length_|| 
+        (float) map_pos.z < 0.0 || (float) map_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
+    
+
+      std::cout << "Query out of bounds"<< std::endl;
+      std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
+    
+      grad[0] = 0;
+      grad[1] = 0;
+      grad[2] = 0;
+      return 0.0;
+
+    } 
+
+    // In bounds
+    
+    gpu_voxels::Vector3f float_ind = map_pos/voxel_side_length_;
+    gpu_voxels::Vector3ui l = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos);
+    // gpu_voxels::Vector3ui h = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos + gpu_voxels::Vector3f(voxel_side_length_, voxel_side_length_, voxel_side_length_));
+    gpu_voxels::Vector3ui h = l + gpu_voxels::Vector3ui(1, 1, 1);
+
+    const float lx = (float) l.x, ly = (float) l.y, lz = (float) l.z; 
+    const float hx = (float) h.x, hy = (float) h.y, hz = (float) h.z;
+
+    // Now find the gradient
+
+
+    grad[0] = (hy-float_ind.y)*(hz-float_ind.z) * (QueryDistance(h.x, l.y, l.z)-QueryDistance(l.x, l.y, l.z)) +
+              (float_ind.y-ly)*(hz-float_ind.z) * (QueryDistance(h.x, h.y, l.z)-QueryDistance(l.x, h.y, l.z)) +
+              (hy-float_ind.y)*(float_ind.z-lz) * (QueryDistance(h.x, l.y, h.z)-QueryDistance(l.x, l.y, h.z)) +
+              (float_ind.y-ly)*(float_ind.z-lz) * (QueryDistance(h.x, h.y, h.z)-QueryDistance(l.x, h.y, h.z));
+
+    grad[1] = (hx-float_ind.x)*(hz-float_ind.z) * (QueryDistance(l.x, h.y, l.z)-QueryDistance(l.x, l.y, l.z)) +
+              (float_ind.x-lx)*(hz-float_ind.z) * (QueryDistance(h.x, h.y, l.z)-QueryDistance(h.x, l.y, l.z)) +
+              (hx-float_ind.x)*(float_ind.z-lz) * (QueryDistance(l.x, h.y, h.z)-QueryDistance(l.x, l.y, h.z)) +
+              (float_ind.x-lx)*(float_ind.z-lz) * (QueryDistance(h.x, h.y, h.z)-QueryDistance(h.x, l.y, h.z));
+
+    grad[2] = (hx-float_ind.x)*(hy-float_ind.y) * (QueryDistance(l.x, l.y, h.z)-QueryDistance(l.x, l.y, l.z)) +
+              (float_ind.x-lx)*(hy-float_ind.y) * (QueryDistance(h.x, l.y, h.z)-QueryDistance(h.x, l.y, l.z)) +
+              (hx-float_ind.x)*(float_ind.y-ly) * (QueryDistance(l.x, h.y, h.z)-QueryDistance(l.x, h.y, l.z)) +
+              (float_ind.x-lx)*(float_ind.y-ly) * (QueryDistance(h.x, h.y, h.z)-QueryDistance(h.x, h.y, l.z));
+    
+    
+    // Now find the distance
+
+    return (double)
+        ((hx-float_ind.x)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistance(l.x, l.y, l.z) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistance(h.x, l.y, l.z) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistance(l.x, h.y, l.z) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistance(h.x, h.y, l.z) +
+        (hx-float_ind.x)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistance(l.x, l.y, h.z) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistance(h.x, l.y, h.z) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(l.x, h.y, h.z) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(h.x, h.y, h.z));
+  }
+
+  double GPUVoxelsHSRServer::GetDistance(const Eigen::Vector3d &pos) const{
 
     gpu_voxels::Vector3f query_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
                                   pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
@@ -470,6 +586,52 @@ namespace gpu_voxels_ros{
     uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, coords);
 
     return sdf_grad_map_[lin_ind].sdf;
+  }
+
+  double GPUVoxelsHSRServer::QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const{
+
+    uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, gpu_voxels::Vector3ui(xi, yi, zi));
+    // return sdf_grad_map_[lin_ind].sdf;
+    return sdf_map_[lin_ind];
+  }
+
+  double GPUVoxelsHSRServer::GetTrilinearDistance(const Eigen::Vector3d &pos) const{
+    
+    //  TODO - Is this needed?
+    // pos.z = std::max((float) 0, pos.z);
+
+    gpu_voxels::Vector3f map_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
+                                  pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
+                                  pos[2]);
+    
+    if(  map_pos.x < 0.0 ||  map_pos.x >= (float) map_dimensions_.x * voxel_side_length_ || 
+         map_pos.y < 0.0 ||  map_pos.y >= (float) map_dimensions_.y * voxel_side_length_ || 
+         map_pos.z < 0.0 ||  map_pos.z >= (float) map_dimensions_.z * voxel_side_length_ ){
+
+      std::cout << "Query out of bounds"<< std::endl;
+
+      return 0.0;
+
+    } 
+
+    // In bounds so now find the distance
+
+    gpu_voxels::Vector3f float_ind = map_pos/voxel_side_length_;
+    gpu_voxels::Vector3ui l = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos);
+    gpu_voxels::Vector3ui h = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos + gpu_voxels::Vector3f(voxel_side_length_, voxel_side_length_, voxel_side_length_));
+
+    const float lx = (float) l.x, ly = (float) l.y, lz = (float) l.z; 
+    const float hx = (float) h.x, hy = (float) h.y, hz = (float) h.z;
+
+    return (double)
+        ((hx-float_ind.x)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistance(l.x, l.y, l.z) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistance(h.x, l.y, l.z) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistance(l.x, h.y, l.z) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistance(h.x, h.y, l.z) +
+        (hx-float_ind.x)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistance(l.x, l.y, h.z) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistance(h.x, l.y, h.z) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(l.x, h.y, h.z) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(h.x, h.y, h.z));
   }
 
   void GPUVoxelsHSRServer::PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg) {
