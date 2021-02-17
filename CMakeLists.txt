@@ -2,9 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(gpu_voxels_ros)
 
 # Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
-set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS} -O3 -Wall -pthread") # -Wextra -Werror
-set(CMAKE_BUILD_TYPE "RELEASE")
+add_compile_options(-std=c++17)
 
 # First we have to find our dependencies:
 FIND_PACKAGE(CUDA REQUIRED)
