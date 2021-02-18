@@ -90,7 +90,7 @@ namespace gpu_voxels_ros{
     timing::Timer sync_callback_timer("CallbackSync");
 
     ros::Time pcl_time;
-    double time_delay = 3e-3;
+    double time_delay = 2e-3;
     // int filter_threshold = 1;
     // float erode_threshold = 0.0f;
     // std::cout << "Remove voxels containing fewer points than: " << filter_threshold << std::endl;
@@ -153,7 +153,8 @@ namespace gpu_voxels_ros{
 
         timing::Timer update_esdf_timer("UpdateESDF");
 
-        signedDistanceMap_->clearMaps();
+        // signedDistanceMap_->clearMaps();
+        pbaDistanceVoxmap_->clearMap();
 
         // countingVoxelList_->clearMap();
         // countingVoxelListFiltered_->clearMap();
@@ -183,7 +184,9 @@ namespace gpu_voxels_ros{
 
         signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
 
-        signedDistanceMap_->parallelBanding3DMark();
+        // signedDistanceMap_->parallelBanding3DMark();
+        signedDistanceMap_->parallelBanding3DUnsigned();
+        // signedDistanceMap_->parallelBanding3DSigned();
 
         update_esdf_timer.Stop();
 
@@ -198,7 +201,8 @@ namespace gpu_voxels_ros{
 
 
         // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
-        pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
+        // pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
+        pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
         // std::cout << "Found gradients and SDF" << std::endl;
 
         transfer_timer.Stop();

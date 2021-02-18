@@ -129,7 +129,7 @@ namespace gpu_voxels_ros{
 
         signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.8, 0.79999);
 
-        signedDistanceMap_->parallelBanding3DMark();
+        signedDistanceMap_->parallelBanding3DSigned();
 
         update_esdf_timer.Stop();
 
