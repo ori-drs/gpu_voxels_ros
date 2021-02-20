@@ -56,13 +56,26 @@ namespace gpu_voxels_ros{
       boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_;
       boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
 
-      // float voxel_side_length_ = 0.05f; // 1 cm voxel size
-      float voxel_side_length_ = 0.4f; // 1 cm voxel size
       bool new_data_received_;
       // Vector3ui map_dimensions_ = Vector3ui(448, 448, 128);
-      Vector3ui map_dimensions_ = Vector3ui(64, 64, 16);
+      
+      // float voxel_side_length_ = 0.05f; 
+      // Vector3ui map_dimensions_ = Vector3ui(256, 256, 128);
+      // Vector3ui origin_ = Vector3ui(9, 62, 2);
+
+      // float voxel_side_length_ = 0.025f; 
+      // Vector3ui map_dimensions_ = Vector3ui(480, 480, 256);
+      // Vector3i origin_ = Vector3i(-18, 124, 5);
+
+      float voxel_side_length_ = 0.10f; 
+      Vector3ui map_dimensions_ = Vector3ui(128, 128, 64);
+      Vector3i origin_ = Vector3i(-4, 31, 1);
+
       PointCloud my_point_cloud_;
-      // Vector3f camera_pos_;
+
+
+      float min_ray_length = 0.4;
+      float max_ray_length = 4.0;
 
       pcl::PointCloud<pcl::PointXYZ> cloud_;
 
@@ -73,12 +86,11 @@ namespace gpu_voxels_ros{
       std::queue<std::tuple<ros::Time, Matrix4f>> cam_transform_queue_;
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
 
-      // int filter_threshold_ = 0;
-      // float erode_threshold_ = 0.0f;
-
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;
- 
+      std::vector<int> occupancy_map_;
+
+
   };
 } // namespace
 

@@ -53,7 +53,7 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
-    private:
+    protected:
       ros::Subscriber pcl_sub_, transform_sub_;
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
@@ -64,14 +64,22 @@ namespace gpu_voxels_ros{
 
       // InheritSignedDistanceVoxelMap* signedDistanceMap_;
 
-      float voxel_side_length_ = 0.05f; 
-      // float voxel_side_length_ = 0.4f; 
       bool new_data_received_;
-      Vector3ui map_dimensions_ = Vector3ui(448, 448, 128);
-      // Vector3ui map_dimensions_ = Vector3ui(64, 64, 16);
-      PointCloud my_point_cloud_;
-      // Vector3f camera_pos_;
 
+      // float voxel_side_length_ = 0.05f; 
+      // Vector3ui map_dimensions_ = Vector3ui(256, 256, 128);
+      // Vector3ui origin_ = Vector3ui(9, 62, 2);
+
+      // float voxel_side_length_ = 0.025f; 
+      // Vector3ui map_dimensions_ = Vector3ui(480, 480, 256);
+      // Vector3i origin_ = Vector3i(-18, 124, 5);
+
+      float voxel_side_length_ = 0.10f; 
+      Vector3ui map_dimensions_ = Vector3ui(128, 128, 64);
+      Vector3i origin_ = Vector3i(-4, 31, 1);
+      
+      PointCloud my_point_cloud_;
+      
       float min_ray_length = 0.4;
       float max_ray_length = 4.0;
 

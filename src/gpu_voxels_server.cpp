@@ -39,21 +39,11 @@ namespace gpu_voxels_ros{
     gvl_->initialize(map_dimensions_.x, map_dimensions_.y, map_dimensions_.z, voxel_side_length_);
 
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmap");
-    gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaInverseDistanceVoxmap");
-    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap1");
-    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap2");
     gvl_->addMap(MT_PROBAB_VOXELMAP, "maintainedProbVoxmap");
-    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelList");
-    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelListFiltered");
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmapVisual");
 
     pbaDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmap"));
-    pbaInverseDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaInverseDistanceVoxmap"));
-    // erodeTempVoxmap1_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap1"));
-    // erodeTempVoxmap2_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap2"));
-    maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
-    // countingVoxelList_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelList"));
-    // countingVoxelListFiltered_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelListFiltered"));
+    maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));    // countingVoxelListFiltered_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelListFiltered"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
 
     sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
@@ -66,17 +56,15 @@ namespace gpu_voxels_ros{
 
   void GPUVoxelsServer::CallbackSync(){
 
-    // std::cout << "CallbackSync..." << std::endl;
-    // auto start = std::chrono::high_resolution_clock::now(); 
     timing::Timer sync_callback_timer("CallbackSync");
 
     ros::Time pcl_time;
     double time_delay = 3e-3;
 
     while (!pointcloud_queue_.empty()) {
-
+        
         timing::Timer update_transform_timer("TransformUpdate");
-
+        
         // First loop until we get a camera pose transform within our tolderance
         bool new_pos = false;
         pcl_time = pointcloud_queue_.front()->header.stamp;
@@ -97,8 +85,6 @@ namespace gpu_voxels_ros{
 
         sensor_msgs::PointCloud2::ConstPtr msg = pointcloud_queue_.front();
         pcl::fromROSMsg(*msg, cloud_);
-
-        // std::cout << "Pointcloud Size:\t" << cloud_.size() << std::endl;
         
         if ((int) cloud_.size()==0) {
               pointcloud_queue_.pop();
@@ -110,7 +96,7 @@ namespace gpu_voxels_ros{
         update_transform_timer.Stop();
 
         timing::Timer transform_pc_timer("ResizePC");
-
+        
         std::vector<Vector3f> point_data;
         point_data.resize(cloud_.points.size());
 
@@ -121,89 +107,46 @@ namespace gpu_voxels_ros{
           point_data[i].z = cloud_.points[i].z;
         }
 
-
         my_point_cloud_.update(point_data);
         
         // transform new pointcloud to world coordinates
-        // my_point_cloud_.transformSelf(&tf_);
         my_point_cloud_.transformSelf(&sync_tf_);
         
         transform_pc_timer.Stop();
 
-        // new_data_received_ = true;
-
-        // ------------------------------------------------------ Not in original
-
-
         timing::Timer update_esdf_timer("UpdateESDF");
 
         pbaDistanceVoxmap_->clearMap();
-        pbaInverseDistanceVoxmap_->clearMap();
-        // countingVoxelList_->clearMap();
-        // countingVoxelListFiltered_->clearMap();
-        // erodeTempVoxmap1_->clearMap();
-        // erodeTempVoxmap2_->clearMap();
 
-        // countingVoxelList_->insertPointCloud(my_point_cloud_, eBVM_OCCUPIED);
-        // countingVoxelListFiltered_->merge(countingVoxelList_);
+        // maintainedProbVoxmap_->insertSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, NULL);
+        maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
+                                                                          min_ray_length, max_ray_length, NULL);
 
-        // This removes voxels which don't have enough points corresponding to the voxel
-        // countingVoxelListFiltered_->remove_underpopulated(filter_threshold_);
+        pbaDistanceVoxmap_->mergeOccupied(maintainedProbVoxmap_, Vector3ui(), 0.5);
 
-        // erodeTempVoxmap1_->merge(countingVoxelListFiltered_);
-        // if (erode_threshold_ > 0)
-        // {
-        //   erodeTempVoxmap1_->erodeInto(*erodeTempVoxmap2_, erode_threshold_);
-        // } else
-        // {
-        //   erodeTempVoxmap1_->erodeLonelyInto(*erodeTempVoxmap2_); //erode only "lonely voxels" without occupied neighbors
-        // }
-        
-        maintainedProbVoxmap_->insertSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, NULL);
-
-        // This does a final check of occupancy threshold before inserting
-        // pbaDistanceVoxmap_->mergeOccupied(erodeTempVoxmap2_, Vector3ui(), 0.8);
-        // pbaInverseDistanceVoxmap_->mergeFree(erodeTempVoxmap2_, Vector3ui(), 0.8);
-        pbaDistanceVoxmap_->mergeOccupied(maintainedProbVoxmap_, Vector3ui(), 0.8);
-        pbaInverseDistanceVoxmap_->mergeFree(maintainedProbVoxmap_, Vector3ui(), 0.5);
-
-        // Calculate the distance map:
         pbaDistanceVoxmap_->parallelBanding3D();
-        // Calculate the inverse distance map:
-        pbaInverseDistanceVoxmap_->parallelBanding3D();        
-        
+
         update_esdf_timer.Stop();
 
         timing::Timer transfer_timer("HostRetrieval");
 
+        pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
 
-
-        // std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map(pbaDistanceVoxmap_->getVoxelMapSize());
-        // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
-        
-        pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
-        // pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
         transfer_timer.Stop();
+
         sync_callback_timer.Stop();
-        // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
+
         pointcloud_queue_.pop();
 
-        // auto finish = std::chrono::high_resolution_clock::now(); 
-        // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(finish - start); 
-        // double dur = duration.count();
-        // std::cout << "Callback time calculation time: " <<  dur << " microseconds." << std::endl;
-
         timing::Timing::Print(std::cout);
-
-        pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
-
-        gvl_->visualizeMap("pbaDistanceVoxmapVisual");
-        // std::cout << "New visual available..." << std::endl;
         
+        // pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
 
+        // gvl_->visualizeMap("pbaDistanceVoxmapVisual");        
     }
   }
 
+  
   void GPUVoxelsServer::PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg)
   {
     pointcloud_queue_.push(msg);
@@ -237,21 +180,9 @@ namespace gpu_voxels_ros{
 
   void GPUVoxelsServer::PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg) {
 
-    // std::cout << "PoseCallback..." << std::endl;
-
-    // Vector3f pos(map_dimensions_.x * voxel_side_length_ * 0.5f, -0.2f, map_dimensions_.z * voxel_side_length_ * 0.5f); // camera located at y=-0.2m, x_max/2, z_max/2
-
-    // float roll = 0.0;
-    // float pitch = 0.0;
-    // float yaw = 0.0;
-
     Vector3f camera_pos = Vector3f(msg->transform.translation.x,
                             msg->transform.translation.y ,
                             msg->transform.translation.z);
-
-    // camera_pos_ = Vector3f(1.2f,
-                // 1.2f,
-                // map_dimensions_.z * voxel_side_length_ * 0.5f);
 
     tf::Quaternion q(msg->transform.rotation.x,
                     msg->transform.rotation.y,
@@ -260,17 +191,14 @@ namespace gpu_voxels_ros{
 
     double roll, pitch, yaw;
     tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-    // std::cout << "roll: " << roll << "pitch: " << pitch << "yaw: " << yaw << std::endl;
 
     tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(0 + roll, 0 + pitch, 0 + yaw), camera_pos);
     tf_ = tf_*T_D_B_*T_B_C_;
-    tf_.a14 = tf_.a14  + map_dimensions_.x * voxel_side_length_ * 0.5f;
-    tf_.a24 = tf_.a24 + map_dimensions_.y * voxel_side_length_ * 0.5f;
-    // camera_pos_ = Vector3f(tf_.a14, tf_.a24, tf_.a34);
 
+    tf_.a14 = tf_.a14  + (map_dimensions_.x + origin_.x)* voxel_side_length_ * 0.5f;
+    tf_.a24 = tf_.a24 + (map_dimensions_.y + origin_.y)* voxel_side_length_ * 0.5f;
+    tf_.a34 = tf_.a34 + origin_.z * voxel_side_length_ * 0.5f;
 
-    // tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(-3.14/2.0 + roll, 0 + pitch, 0 + yaw), pos);
-    
     cam_transform_queue_.push(std::make_tuple(msg->header.stamp, tf_));
 
   }

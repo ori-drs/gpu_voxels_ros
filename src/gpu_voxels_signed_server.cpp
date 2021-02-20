@@ -202,8 +202,9 @@ namespace gpu_voxels_ros{
     tf_ = Matrix4f::createFromRotationAndTranslation(Matrix3f::createFromRPY(0 + roll, 0 + pitch, 0 + yaw), camera_pos);
     tf_ = tf_*T_D_B_*T_B_C_;
 
-    tf_.a14 = tf_.a14  + map_dimensions_.x * voxel_side_length_ * 0.5f;
-    tf_.a24 = tf_.a24 + map_dimensions_.y * voxel_side_length_ * 0.5f;
+    tf_.a14 = tf_.a14  + (map_dimensions_.x + origin_.x)* voxel_side_length_ * 0.5f;
+    tf_.a24 = tf_.a24 + (map_dimensions_.y + origin_.y)* voxel_side_length_ * 0.5f;
+    tf_.a34 = tf_.a34 + origin_.z * voxel_side_length_ * 0.5f;
 
     cam_transform_queue_.push(std::make_tuple(msg->header.stamp, tf_));
 
