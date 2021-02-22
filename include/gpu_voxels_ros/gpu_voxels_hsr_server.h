@@ -94,7 +94,12 @@ namespace gpu_voxels_ros{
 
       // ASUS Xtion Pro Live (HSR)
       float min_ray_length_ = 0.8;
-      float max_ray_length_ = 3.5;
+      // float max_ray_length_ = 3.5;
+
+
+
+      float max_ray_length_ = 7; // Testing whether this helps clearing
+
 
       Matrix4f tf_;
       Matrix4f sync_tf_;
