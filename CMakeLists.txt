@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(gpu_voxels_ros)
 
 # Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++17)
+add_compile_options(-std=c++11 -D_BUILD_GVL_WITH_URDF_SUPPORT_ -D_IC_BUILDER_GPU_VOXELS_URDF_ROBOT_)
 
 # First we have to find our dependencies:
 FIND_PACKAGE(CUDA REQUIRED)
