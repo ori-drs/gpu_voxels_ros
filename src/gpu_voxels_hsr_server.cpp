@@ -35,11 +35,15 @@ namespace gpu_voxels_ros{
     node_.param<std::string>("pcl_topic", pcl_topic_, "/hsrb/head_rgbd_sensor/depth_registered/rectified_points");
     node_.param<std::string>("sensor_frame", sensor_frame_, "head_rgbd_sensor_rgb_frame");
 
-    node_.param<float>("voxel_side_length", voxel_side_length_, 0.05f);
+    node_.param<float>("voxel_side_length", voxel_side_length_, 0.025f);
     node_.param<int>("map_size_x", (int&) map_dimensions_.x, 448);
     node_.param<int>("map_size_y", (int&) map_dimensions_.y, 448);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 128);
 
+    // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 704);
+    // node_.param<int>("map_size_y", (int&) map_dimensions_.y, 704);
+    // node_.param<int>("map_size_z", (int&) map_dimensions_.z, 128);
+    
     // node_.param<float>("voxel_side_length", voxel_side_length_, 0.02f);
     // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 512);
     // node_.param<int>("map_size_y", (int&) map_dimensions_.y, 512);
@@ -47,8 +51,10 @@ namespace gpu_voxels_ros{
 
     map_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_pointcloud", 1, true);
     ground_sdf_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_ground_sdf", 1, true);
+    update_time_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_update_times", 1, true);
     ground_sdf_grad_pub_ = node.advertise<visualization_msgs::MarkerArray>("gpu_voxels_ground_sdf_grad", 2000, true);
-
+    cone_flag_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_cone_flags", 1, true);
+    
     transform_sub_ = node.subscribe(transform_topic_, 10, &GPUVoxelsHSRServer::PoseCallback, this);
     pcl_sub_ = node.subscribe(pcl_topic_, 10, &GPUVoxelsHSRServer::PointcloudCallback, this);
 
@@ -58,27 +64,27 @@ namespace gpu_voxels_ros{
     gvl_->addMap(MT_SIGNED_DISTANCE_VOXELMAP, "pbaDistanceVoxmap");
     gvl_->addMap(MT_PROBAB_VOXELMAP, "maintainedProbVoxmap");
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmapVisual");
+    gvl_->addMap(MT_PROBAB_VOXELMAP, "myRobotMap");
 
-    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelList");
-    // gvl_->addMap(MT_COUNTING_VOXELLIST, "countingVoxelListFiltered");
-    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap1");
-    // gvl_->addMap(MT_PROBAB_VOXELMAP, "erodeTempVoxmap2");
+    // Add the robot model
+    gvl_->addRobot("hsrRobot", "hsr/originals/mod_hsrb.urdf", true);
+    std::cout << "Added HSR Urdf model" << std::endl;
+
+    robot_ptr_ = dynamic_pointer_cast<gpu_voxels::robot::UrdfRobot>(gvl_->getRobot("hsrRobot"));
+
+    robotVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("myRobotMap"));
 
     pbaDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmap"));
     pbaInverseDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapInverse"));
     maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
-
-    // countingVoxelList_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelList"));
-    // erodeTempVoxmap1_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap1"));
-    // erodeTempVoxmap2_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("erodeTempVoxmap2"));
-    // countingVoxelListFiltered_ = dynamic_pointer_cast<CountingVoxelList>(gvl_->getMap("countingVoxelListFiltered"));
-
     signedDistanceMap_ = dynamic_pointer_cast<InheritSignedDistanceVoxelMap>(pbaDistanceVoxmap_);
 
-    sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
+    // sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
     sdf_map_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
-    occupancy_map_ = std::vector<int>(pbaDistanceVoxmap_->getVoxelMapSize());
+    // time_update_map_ = std::vector<uint16_t>(maintainedProbVoxmap_->getVoxelMapSize());
+    // occupancy_map_ = std::vector<int>(pbaDistanceVoxmap_->getVoxelMapSize());
+    flag_map_ = std::vector<bool>(maintainedProbVoxmap_->getVoxelMapSize(), false);
 
     maintainedProbVoxmap_->clearMap();
 
@@ -91,9 +97,9 @@ namespace gpu_voxels_ros{
 
     ros::Time pcl_time;
     double time_delay = 2e-3;
-    // int filter_threshold = 1;
-    // float erode_threshold = 0.0f;
-    // std::cout << "Remove voxels containing fewer points than: " << filter_threshold << std::endl;
+    timing::Timer time_increment_timer("time_increment_timer");
+    maintainedProbVoxmap_->incrementTimeSteps();
+    time_increment_timer.Stop();
 
     while (!pointcloud_queue_.empty()) {
         
@@ -153,76 +159,113 @@ namespace gpu_voxels_ros{
 
         timing::Timer update_esdf_timer("UpdateESDF");
 
-        // signedDistanceMap_->clearMaps();
         pbaDistanceVoxmap_->clearMap();
 
-        // countingVoxelList_->clearMap();
-        // countingVoxelListFiltered_->clearMap();
-        // erodeTempVoxmap1_->clearMap();
-        // erodeTempVoxmap2_->clearMap();
-        // maintainedProbVoxmap_->clearMap();
-        
-        // countingVoxelList_->insertPointCloud(my_point_cloud_, eBVM_OCCUPIED);
-        // countingVoxelListFiltered_->merge(countingVoxelList_);
-        // countingVoxelListFiltered_->remove_underpopulated(filter_threshold);
-        // gvl_->visualizeMap("countingVoxelList");
-        // gvl_->visualizeMap("countingVoxelListFiltered");
-
-        // erodeTempVoxmap1_->merge(countingVoxelListFiltered_);
-        // gvl_->visualizeMap("erodeTempVoxmap1");
-        // erodeTempVoxmap1_->erodeLonelyInto(*erodeTempVoxmap2_); //erode only "lonely voxels" without occupied neighbors
-        
-        // gvl_->visualizeMap("erodeTempVoxmap2");
-
-        // // maintainedProbVoxmap_->mergeOccupied(erodeTempVoxmap2_);
-        // signedDistanceMap_->occupancyMerge(erodeTempVoxmap2_, 0.95, 0.94999);
-
-
-        // maintainedProbVoxmap_->insertSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, NULL);
         maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
 
         signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
 
-        // signedDistanceMap_->parallelBanding3DMark();
         signedDistanceMap_->parallelBanding3DUnsigned();
-        // signedDistanceMap_->parallelBanding3DSigned();
 
         update_esdf_timer.Stop();
 
         timing::Timer transfer_timer("HostRetrieval");
-
-        // std::cout << "Retrieving gradients and SDF" << std::endl;
-        // signedDistanceMap_->getSignedDistancesAndGradientsToHost(sdf_grad_map_);
-        // signedDistanceMap_->getSignedDistancesToHost(sdf_map_);
-        // pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
-        // pbaDistanceVoxmap_->getOccupancyToHost(occupancy_map_);
-
-
-
-        // pbaDistanceVoxmap_->getSignedDistancesAndGradientsToHost(pbaInverseDistanceVoxmap_, sdf_grad_map_);
-        // pbaDistanceVoxmap_->getSignedDistancesToHost(pbaInverseDistanceVoxmap_, sdf_map_);
+        // maintainedProbVoxmap_->getVoxelUpdateTimesToHost(time_update_map_);
+        
         pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
-        // std::cout << "Found gradients and SDF" << std::endl;
+
 
         transfer_timer.Stop();
         sync_callback_timer.Stop();
         pointcloud_queue_.pop();
 
-        // timing::Timing::Print(std::cout);
-        // pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
-        // gvl_->visualizeMap("pbaDistanceVoxmapVisual");        
         
         // publishRVIZOccupancy(sdf_grad_map_);
         // publishRVIZGroundSDF(sdf_grad_map_);
+        maintainedProbVoxmap_->getVoxelFlagsToHost(flag_map_);
+        
+        publishRVIZVoxelFlags(flag_map_);
 
-        publishRVIZGroundSDF(sdf_map_);
-        publishRVIZOccupancy(sdf_map_);
+        // publishRVIZUpdateTimes(time_update_map_, 5);
+
+        // publishRVIZGroundSDF(sdf_map_);
+        // publishRVIZOccupancy(sdf_map_);
+
+
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
+        // timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
+  }
+
+  void GPUVoxelsHSRServer::publishRVIZVoxelFlags(const std::vector<bool> &flag_map) {
+    pcl::PointXYZ pt;
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+
+    // int ctr = 0;
+    // int ctr_else = 0;
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x)
+      for (size_t y = 0; y < map_dimensions_.y; ++y)
+        for (size_t z = 0; z < map_dimensions_.z; ++z) {
+          size_t ind = z * map_dimensions_.x * map_dimensions_.y + y * map_dimensions_.x + x;
+          if (flag_map[ind]) {
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = (float)z * (float) voxel_side_length_;
+            cloud.push_back(pt);
+            // ctr+=1;
+          }
+          else{
+            // ctr_else+=1;
+            continue;
+          }
+    }
+
+    // std::cout << "Numer of true voxel flags: " << ctr << std::endl;
+    // std::cout << "Numer of false voxel flags: " << ctr_else << std::endl;
+
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "odom";
+    sensor_msgs::PointCloud2 cloud_msg;
+
+    pcl::toROSMsg(cloud, cloud_msg);
+    cone_flag_pub_.publish(cloud_msg);
+  }
+
+  void GPUVoxelsHSRServer::publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold) {
+    pcl::PointXYZI pt;
+    pcl::PointCloud<pcl::PointXYZI> cloud;
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x)
+      for (size_t y = 0; y < map_dimensions_.y; ++y)
+        for (size_t z = 0; z < map_dimensions_.z; ++z) {
+          size_t ind = z * map_dimensions_.x * map_dimensions_.y + y * map_dimensions_.x + x;
+          if (time_map[ind] <= threshold) {
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = (float)z * (float) voxel_side_length_;
+            pt.intensity = time_map[ind];
+            cloud.push_back(pt);
+          }
+          else{
+            continue;
+          }
+    }
+
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "odom";
+    sensor_msgs::PointCloud2 cloud_msg;
+
+    pcl::toROSMsg(cloud, cloud_msg);
+    update_time_pub_.publish(cloud_msg);
   }
 
   void GPUVoxelsHSRServer::publishRVIZOccupancy(const std::vector<int> &occupancy_map) {
@@ -709,4 +752,96 @@ namespace gpu_voxels_ros{
     savefile.close();
     LOGGING_INFO(Gpu_voxels, "File saved successfully" << endl);
   }
+
+  float GPUVoxelsHSRServer::GetConeViewCost(robot::JointValueMap robot_joints){
+    // std::cout << "GPUVoxelsHSRServer::GetConeViewCost" << std::endl;
+    gvl_->setRobotConfiguration("hsrRobot", robot_joints);
+
+    // Get the camera position for a given robot state
+    KDL::Frame camera_pose = robot_ptr_->getLink("head_rgbd_sensor_link")->getPose();
+
+    // Assumed that the base is on flat ground 
+    // Camera theta = base theta + head pan
+    float theta = robot_joints["theta_joint"] + robot_joints["head_pan_joint"]; 
+    float alpha = robot_joints["head_tilt_joint"]; 
+
+    // These are the camera specific field of view parametera. TODO set these somewhere outside of member functions
+    float dalpha = 1.1*M_PI_4;
+    float dtheta = 1.3*M_PI_4;
+
+    // criteria for being inside the cone
+    gpu_voxels::Vector3f cam_pos(camera_pose.p[0], camera_pose.p[1], camera_pose.p[2]);
+    gpu_voxels::Vector4f cam_fov(theta - dtheta/2, theta + dtheta/2, alpha - dalpha/2, alpha + dalpha/2);
+
+    // Get the time cost
+
+    float cost = maintainedProbVoxmap_->getTotalConeCost(robotVoxmap_, cam_pos, cam_fov);
+
+
+    // uint32_t cost = maintainedProbVoxmap_->getConeTimeCost(cam_pos, cam_fov);
+    // uint32_t traj_cost = robotVoxmap_->getConeTrajectoryCost(cam_pos, cam_fov);
+    // robotVoxmap_
+    // std::cout << "Cone time cost (avg): " <<  (float) cost / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z) 
+    //           << "\t" << "Cone traj cost (avg): " <<  (float) traj_cost / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z)  << std::endl;
+    // return (float) (cost + traj_cost) / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z);
+    return cost;
+  }
+
+  void GPUVoxelsHSRServer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2]){
+    LOGGING_INFO(Gpu_voxels, "GPUVoxelsHSRServer::GetNBV" << endl);
+
+    // Camera limits 
+    // tilt -1.570～0.523[rad]	-90~30[deg]
+    // pan -3.839～1.745[rad]	-220～100[deg] 
+    size_t num_pan_primitives = 5;
+    size_t num_tilt_primitives = 3;
+    float tilt_range_div = (0.523 + 1.570)/ (float) num_tilt_primitives;
+    float pan_range_div = (3.839 + 1.745)/ (float) num_pan_primitives;
+    
+    timing::Timer nbv_timer("nbv_timer");
+    gvl_->clearMap("myRobotMap");
+
+    size_t counter = 0;
+
+    if(robot_joints_vec.size() > 1){
+      for (size_t i = 1; i < robot_joints_vec.size(); i++){
+        gvl_->setRobotConfiguration("hsrRobot", robot_joints_vec[i]);
+        BitVoxelMeaning v = BitVoxelMeaning(eBVM_SWEPT_VOLUME_START + 1 + counter);
+        gvl_->insertRobotIntoMap("hsrRobot", "myRobotMap", v);
+        counter++;
+      }
+    }
+
+    std::vector<float> costs;
+
+    for (size_t i = 0; i < num_pan_primitives; i++)
+    {
+      float pan_joint = -3.839 + i * pan_range_div; 
+
+      for (size_t j = 0; j < num_tilt_primitives; j++){
+        float tilt_joint = -1.570 + j * tilt_range_div;
+
+        robot_joints_vec[0]["head_pan_joint"] = pan_joint;
+        robot_joints_vec[0]["head_tilt_joint"] = tilt_joint;
+    
+        timing::Timer single_view_cost_timer("single_view_cost_timer");
+        costs.push_back(this->GetConeViewCost(robot_joints_vec[0]));
+        single_view_cost_timer.Stop();
+
+      } 
+    }
+
+    nbv_timer.Stop();
+    
+
+    int min_cost_idx = std::min_element( costs.begin(), costs.end()) - costs.begin();
+    size_t i = min_cost_idx % num_pan_primitives;
+    size_t j = min_cost_idx % num_tilt_primitives;
+    nbv_joints[0] =  -3.839 + i * pan_range_div;
+    nbv_joints[1] =  -1.570 + j * tilt_range_div;
+        // float pan_joint = -3.839 + i * pan_range_div; 
+    // float tilt_joint = -1.570 + j * tilt_range_div;
+
+  }
+
 } // namespace 

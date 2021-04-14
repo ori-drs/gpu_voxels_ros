@@ -33,6 +33,7 @@
 #include <visualization_msgs/Marker.h>
 
 using boost::dynamic_pointer_cast;
+
 using gpu_voxels::voxelmap::ProbVoxelMap;
 using gpu_voxels::voxelmap::DistanceVoxelMap;
 using gpu_voxels::voxellist::CountingVoxelList;
@@ -60,6 +61,9 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
+      void publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold);
+      void publishRVIZVoxelFlags(const std::vector<bool> &flag_map);
+
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
       void publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
@@ -67,18 +71,23 @@ namespace gpu_voxels_ros{
       void publishRVIZGroundSDF(const std::vector<float> &sdf_map);
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
 
+      void GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2]);
+      float GetConeViewCost(robot::JointValueMap robot_joints);
+
     private:
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_;
       ros::Subscriber pcl_sub_, transform_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_;
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
       boost::shared_ptr<InheritSignedDistanceVoxelMap> signedDistanceMap_;
 
-      boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_;
+      boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_, robotVoxmap_;
       boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
+
+      boost::shared_ptr<gpu_voxels::robot::UrdfRobot> robot_ptr_;
 
       float voxel_side_length_; 
       bool new_data_received_;
@@ -110,6 +119,8 @@ namespace gpu_voxels_ros{
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;
+      std::vector<uint16_t> time_update_map_;
+      std::vector<bool> flag_map_;
       std::vector<int> occupancy_map_;
  
   };
