@@ -66,6 +66,8 @@ namespace gpu_voxels_ros{
     gvl_->addMap(MT_DISTANCE_VOXELMAP, "pbaDistanceVoxmapVisual");
     gvl_->addMap(MT_PROBAB_VOXELMAP, "myRobotMap");
 
+    gvl_->addMap(MT_BITVECTOR_VOXELMAP, "myBitRobotMap");
+
     // Add the robot model
     gvl_->addRobot("hsrRobot", "hsr/originals/mod_hsrb.urdf", true);
     std::cout << "Added HSR Urdf model" << std::endl;
@@ -184,8 +186,12 @@ namespace gpu_voxels_ros{
         // publishRVIZOccupancy(sdf_grad_map_);
         // publishRVIZGroundSDF(sdf_grad_map_);
         maintainedProbVoxmap_->getVoxelFlagsToHost(flag_map_);
-        
         publishRVIZVoxelFlags(flag_map_);
+       
+        pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
+        // gvl_->visualizeMap("myRobotMap");
+        gvl_->visualizeMap("pbaDistanceVoxmapVisual");
+        gvl_->visualizeMap("myBitRobotMap");
 
         // publishRVIZUpdateTimes(time_update_map_, 5);
 
@@ -777,18 +783,36 @@ namespace gpu_voxels_ros{
 
     float cost = maintainedProbVoxmap_->getTotalConeCost(robotVoxmap_, cam_pos, cam_fov);
 
-
-    // uint32_t cost = maintainedProbVoxmap_->getConeTimeCost(cam_pos, cam_fov);
-    // uint32_t traj_cost = robotVoxmap_->getConeTrajectoryCost(cam_pos, cam_fov);
-    // robotVoxmap_
     // std::cout << "Cone time cost (avg): " <<  (float) cost / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z) 
     //           << "\t" << "Cone traj cost (avg): " <<  (float) traj_cost / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z)  << std::endl;
     // return (float) (cost + traj_cost) / (float) (map_dimensions_.x * map_dimensions_.y * map_dimensions_.z);
     return cost;
   }
 
-  void GPUVoxelsHSRServer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2]){
-    LOGGING_INFO(Gpu_voxels, "GPUVoxelsHSRServer::GetNBV" << endl);
+  void GPUVoxelsHSRServer::SetConeFlags(robot::JointValueMap robot_joints){
+    gvl_->setRobotConfiguration("hsrRobot", robot_joints);
+
+    // Get the camera position for a given robot state
+    KDL::Frame camera_pose = robot_ptr_->getLink("head_rgbd_sensor_link")->getPose();
+
+    // Assumed that the base is on flat ground 
+    // Camera theta = base theta + head pan
+    float theta = robot_joints["theta_joint"] + robot_joints["head_pan_joint"]; 
+    float alpha = robot_joints["head_tilt_joint"]; 
+
+    // These are the camera specific field of view parametera. TODO set these somewhere outside of member functions
+    float dalpha = 1.1*M_PI_4;
+    float dtheta = 1.3*M_PI_4;
+
+    // criteria for being inside the cone
+    gpu_voxels::Vector3f cam_pos(camera_pose.p[0], camera_pose.p[1], camera_pose.p[2]);
+    gpu_voxels::Vector4f cam_fov(theta - dtheta/2, theta + dtheta/2, alpha - dalpha/2, alpha + dalpha/2);
+
+    maintainedProbVoxmap_->setConeFlags(cam_pos, cam_fov);
+  }
+
+  void GPUVoxelsHSRServer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t nbv_time_ind){
+    // LOGGING_INFO(Gpu_voxels, "GPUVoxelsHSRServer::GetNBV" << endl);
 
     // Camera limits 
     // tilt -1.570～0.523[rad]	-90~30[deg]
@@ -800,48 +824,105 @@ namespace gpu_voxels_ros{
     
     timing::Timer nbv_timer("nbv_timer");
     gvl_->clearMap("myRobotMap");
+    gvl_->clearMap("myBitRobotMap");
 
     size_t counter = 0;
 
+
+    // Sweep trajectory volume
     if(robot_joints_vec.size() > 1){
-      for (size_t i = 1; i < robot_joints_vec.size(); i++){
+      for (size_t i = nbv_time_ind; i < robot_joints_vec.size(); i++){
+        robot_joints_vec[i]["x_joint"] = robot_joints_vec[i]["x_joint"] + (0.5 * (float) map_dimensions_.x * voxel_side_length_) ; 
+        robot_joints_vec[i]["y_joint"] = robot_joints_vec[i]["y_joint"] + (0.5 * (float) map_dimensions_.y * voxel_side_length_); 
         gvl_->setRobotConfiguration("hsrRobot", robot_joints_vec[i]);
         BitVoxelMeaning v = BitVoxelMeaning(eBVM_SWEPT_VOLUME_START + 1 + counter);
         gvl_->insertRobotIntoMap("hsrRobot", "myRobotMap", v);
+        gvl_->insertRobotIntoMap("hsrRobot", "myBitRobotMap", v);
         counter++;
+        // gvl_->visualizeMap("myBitRobotMap");
       }
     }
-
-    std::vector<float> costs;
-
-    for (size_t i = 0; i < num_pan_primitives; i++)
-    {
-      float pan_joint = -3.839 + i * pan_range_div; 
-
-      for (size_t j = 0; j < num_tilt_primitives; j++){
-        float tilt_joint = -1.570 + j * tilt_range_div;
-
-        robot_joints_vec[0]["head_pan_joint"] = pan_joint;
-        robot_joints_vec[0]["head_tilt_joint"] = tilt_joint;
-    
-        timing::Timer single_view_cost_timer("single_view_cost_timer");
-        costs.push_back(this->GetConeViewCost(robot_joints_vec[0]));
-        single_view_cost_timer.Stop();
-
-      } 
+    else{
+      robot_joints_vec[0]["x_joint"] = robot_joints_vec[0]["x_joint"] + (0.5 * (float) map_dimensions_.x * voxel_side_length_) ; 
+      robot_joints_vec[0]["y_joint"] = robot_joints_vec[0]["y_joint"] + (0.5 * (float) map_dimensions_.y * voxel_side_length_); 
     }
 
+    robot::JointValueMap query_joint_map = robot_joints_vec[nbv_time_ind];
+    std::vector<float> costs;
+
+    // Global primitive 
+    // for (size_t i = 0; i < num_pan_primitives; i++)
+    // {
+    //   float pan_joint = -3.839 + i * pan_range_div; 
+
+    //   for (size_t j = 0; j < num_tilt_primitives; j++){
+    //     float tilt_joint = -1.570 + j * tilt_range_div;
+
+    //     query_joint_map["head_pan_joint"] = pan_joint;
+    //     query_joint_map["head_tilt_joint"] = tilt_joint;
+    
+    //     timing::Timer single_view_cost_timer("single_view_cost_timer");
+    //     costs.push_back(this->GetConeViewCost(query_joint_map));
+    //     single_view_cost_timer.Stop();
+
+    //   } 
+    // }
+
+    // int min_cost_idx = std::min_element( costs.begin(), costs.end()) - costs.begin();
+    // size_t i = min_cost_idx % num_pan_primitives;
+    // size_t j = min_cost_idx % num_tilt_primitives;
+    // nbv_joints[0] =  -3.839 + i * pan_range_div;
+    // nbv_joints[1] =  -1.570 + j * tilt_range_div;
+
+    // Primitives local to the current head pose
+    std::vector<float> pan_deltas = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
+    std::vector<float> tilt_deltas = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
+    for (size_t i = 0; i < pan_deltas.size(); i++){
+      float cost;
+      std::cout << " | " << std::endl;
+     
+      query_joint_map["head_pan_joint"] = std::min(std::max(-3.5, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[i])), 1.6);
+      for (size_t j = 0; j < tilt_deltas.size(); j++){
+        query_joint_map["head_tilt_joint"] = std::min(std::max(-1.20, (double) (robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[j])), 1.2);
+        
+        if (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[i] < -3.5 | robot_joints_vec[0]["head_pan_joint"] + pan_deltas[i] > 1.6 |
+            robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[j] < -1.2 | robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[j] > 1.2)
+        {
+          cost = -FLT_MAX;
+        }
+        else{
+          timing::Timer single_view_cost_timer("single_view_cost_timer");
+          cost = this->GetConeViewCost(query_joint_map);
+          single_view_cost_timer.Stop();
+        }
+
+        costs.push_back(cost);
+        std::cout << cost << " | ";
+
+      } 
+      std::cout << std::endl;
+      std::cout << "---------------------"<< std::endl;
+    }
+
+    int min_cost_idx = std::max_element( costs.begin(), costs.end()) - costs.begin();
+    size_t pan_ind = floor((float) min_cost_idx / (float) tilt_deltas.size());
+    size_t tilt_ind = min_cost_idx % tilt_deltas.size();
+    nbv_joints[0] =  std::min(std::max(-3.5, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[pan_ind])), 1.6);
+    nbv_joints[1] =  std::min(std::max(-1.20, (double) (robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[tilt_ind])), 1.2);
     nbv_timer.Stop();
     
 
-    int min_cost_idx = std::min_element( costs.begin(), costs.end()) - costs.begin();
-    size_t i = min_cost_idx % num_pan_primitives;
-    size_t j = min_cost_idx % num_tilt_primitives;
-    nbv_joints[0] =  -3.839 + i * pan_range_div;
-    nbv_joints[1] =  -1.570 + j * tilt_range_div;
+
         // float pan_joint = -3.839 + i * pan_range_div; 
     // float tilt_joint = -1.570 + j * tilt_range_div;
 
+    robot_joints_vec[nbv_time_ind]["head_pan_joint"] = nbv_joints[0];
+    robot_joints_vec[nbv_time_ind]["head_tilt_joint"] = nbv_joints[1];
+    std::cout << "Head Change: \t " << pan_deltas[pan_ind] << "\t " << tilt_deltas[tilt_ind] << std::endl;
+
+    this->SetConeFlags(robot_joints_vec[nbv_time_ind]);
+    // maintainedProbVoxmap_->getVoxelFlagsToHost(flag_map_);
+    // publishRVIZVoxelFlags(flag_map_);
   }
 
 } // namespace 

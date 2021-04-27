@@ -61,8 +61,6 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
-      void publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold);
-      void publishRVIZVoxelFlags(const std::vector<bool> &flag_map);
 
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
@@ -71,8 +69,12 @@ namespace gpu_voxels_ros{
       void publishRVIZGroundSDF(const std::vector<float> &sdf_map);
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
 
-      void GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2]);
+      // NBV
+      void SetConeFlags(robot::JointValueMap robot_joints);
+      void GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t nbv_time_ind);
       float GetConeViewCost(robot::JointValueMap robot_joints);
+      void publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold);
+      void publishRVIZVoxelFlags(const std::vector<bool> &flag_map);
 
     private:
       ros::NodeHandle node_;
