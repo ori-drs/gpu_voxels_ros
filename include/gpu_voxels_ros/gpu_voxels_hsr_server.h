@@ -68,6 +68,8 @@ namespace gpu_voxels_ros{
       void publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZGroundSDF(const std::vector<float> &sdf_map);
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
+      void publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map);
+      void publishRVIZCostmap(const std::vector<float> &costmap);
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
@@ -76,18 +78,21 @@ namespace gpu_voxels_ros{
       void publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold);
       void publishRVIZVoxelFlags(const std::vector<bool> &flag_map);
 
+      float getPercentageMapExplored() const;
+
     private:
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_;
       ros::Subscriber pcl_sub_, transform_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_;
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
       boost::shared_ptr<InheritSignedDistanceVoxelMap> signedDistanceMap_;
 
-      boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_, robotVoxmap_;
-      boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
+      // boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_, robotVoxmap_, cleanVoxmap_;
+      boost::shared_ptr<ProbVoxelMap> maintainedProbVoxmap_, robotVoxmap_, cleanVoxmap_, cleanVoxmapVisual_;
+      // boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
 
       boost::shared_ptr<gpu_voxels::robot::UrdfRobot> robot_ptr_;
 
@@ -107,6 +112,9 @@ namespace gpu_voxels_ros{
       float min_ray_length_ = 0.8;
       // float max_ray_length_ = 3.5;
 
+      // These are the camera specific field of view parametera.
+      float dalpha_ = 1.1*M_PI_4;
+      float dtheta_ = 1.3*M_PI_4;
 
 
       float max_ray_length_ = 7; // Testing whether this helps clearing
@@ -121,10 +129,12 @@ namespace gpu_voxels_ros{
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;
-      std::vector<uint16_t> time_update_map_;
+      std::vector<uint> time_update_map_;
       std::vector<bool> flag_map_;
       std::vector<int> occupancy_map_;
- 
+      std::vector<int> traj_step_map_;
+      std::vector<float> host_costmap_;
+
   };
 } // namespace
 
