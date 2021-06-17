@@ -6,8 +6,8 @@ add_compile_options(-std=c++17)
 
 # First we have to find our dependencies:
 FIND_PACKAGE(CUDA REQUIRED)
-FIND_PACKAGE(icl_core PATHS /home/mark/installs/gpu-voxels/export REQUIRED )
-FIND_PACKAGE(gpu_voxels PATHS /home/mark/installs/gpu-voxels/export REQUIRED)
+FIND_PACKAGE(icl_core PATHS /home/orion/installs/gpu-voxels/export REQUIRED )
+FIND_PACKAGE(gpu_voxels PATHS /home/orion/installs/gpu-voxels/export REQUIRED)
 FIND_PACKAGE(Boost COMPONENTS system REQUIRED)
 FIND_PACKAGE(PCL REQUIRED)
 FIND_PACKAGE(orocos_kdl REQUIRED)

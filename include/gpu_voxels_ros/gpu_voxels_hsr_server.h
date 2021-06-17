@@ -93,8 +93,8 @@ namespace gpu_voxels_ros{
       pcl::PointCloud<pcl::PointXYZ> cloud_;
 
       // ASUS Xtion Pro Live (HSR)
-      float min_ray_length_ = 0.8;
-      float max_ray_length_ = 3.5;
+      float min_ray_length_ = 0.2;
+      float max_ray_length_ = 7.0;
 
       Matrix4f tf_;
       Matrix4f sync_tf_;

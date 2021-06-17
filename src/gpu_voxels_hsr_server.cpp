@@ -35,9 +35,9 @@ namespace gpu_voxels_ros{
     node_.param<std::string>("pcl_topic", pcl_topic_, "/hsrb/head_rgbd_sensor/depth_registered/rectified_points");
     node_.param<std::string>("sensor_frame", sensor_frame_, "head_rgbd_sensor_rgb_frame");
 
-    node_.param<float>("voxel_side_length", voxel_side_length_, 0.05f);
-    node_.param<int>("map_size_x", (int&) map_dimensions_.x, 448);
-    node_.param<int>("map_size_y", (int&) map_dimensions_.y, 448);
+    node_.param<float>("voxel_side_length", voxel_side_length_, 0.025f);
+    node_.param<int>("map_size_x", (int&) map_dimensions_.x, 320);
+    node_.param<int>("map_size_y", (int&) map_dimensions_.y, 320);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 128);
 
     // node_.param<float>("voxel_side_length", voxel_side_length_, 0.02f);
