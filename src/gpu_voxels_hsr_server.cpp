@@ -35,10 +35,23 @@ namespace gpu_voxels_ros{
     node_.param<std::string>("pcl_topic", pcl_topic_, "/hsrb/head_rgbd_sensor/depth_registered/rectified_points");
     node_.param<std::string>("sensor_frame", sensor_frame_, "head_rgbd_sensor_rgb_frame");
 
-    node_.param<float>("voxel_side_length", voxel_side_length_, 0.025f);
-    node_.param<int>("map_size_x", (int&) map_dimensions_.x, 448);
-    node_.param<int>("map_size_y", (int&) map_dimensions_.y, 448);
-    node_.param<int>("map_size_z", (int&) map_dimensions_.z, 128);
+
+    // node_.param<float>("voxel_side_length", voxel_side_length_, 0.1f);
+    // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 256);
+    // node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
+    // node_.param<int>("map_size_z", (int&) map_dimensions_.z, 32);
+
+
+    node_.param<float>("voxel_side_length", voxel_side_length_, 0.05f);
+    node_.param<int>("map_size_x", (int&) map_dimensions_.x, 256);
+    node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
+    node_.param<int>("map_size_z", (int&) map_dimensions_.z, 64);
+
+    // Iros params
+    // node_.param<float>("voxel_side_length", voxel_side_length_, 0.025f);
+    // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 448);
+    // node_.param<int>("map_size_y", (int&) map_dimensions_.y, 448);
+    // node_.param<int>("map_size_z", (int&) map_dimensions_.z, 128);
 
     // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 704);
     // node_.param<int>("map_size_y", (int&) map_dimensions_.y, 704);
@@ -220,17 +233,17 @@ namespace gpu_voxels_ros{
         // gvl_->visualizeMap("cleanVoxmapVisual");
 
         // publishRVIZTrajSweepOccupancy(traj_step_map_);
-        publishRVIZCostmap(host_costmap_);
+        // publishRVIZCostmap(host_costmap_);
 
         // publishRVIZUpdateTimes(time_update_map_, 5);
 
-        // publishRVIZGroundSDF(sdf_map_);
+        publishRVIZGroundSDF(sdf_map_);
         publishRVIZOccupancy(sdf_map_);
 
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        // timing::Timing::Print(std::cout);
+        timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
@@ -940,7 +953,7 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_->setConeFlags(cam_pos, cam_fov);
   }
 
-  void GPUVoxelsHSRServer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t nbv_time_ind){
+  void GPUVoxelsHSRServer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t current_ind){
     // LOGGING_INFO(Gpu_voxels, "GPUVoxelsHSRServer::GetNBV" << endl);
 
     // Camera limits 
@@ -950,16 +963,17 @@ namespace gpu_voxels_ros{
     // size_t num_tilt_primitives = 3;
     // float tilt_range_div = (0.523 + 1.570)/ (float) num_tilt_primitives;
     // float pan_range_div = (3.839 + 1.745)/ (float) num_pan_primitives;
-    
+    size_t swept_vol_start_ind = std::min(current_ind + ind_delay_, robot_joints_vec.size() - 1); 
+
     timing::Timer nbv_timer("nbv_timer");
     gvl_->clearMap("myRobotMap");
     // gvl_->clearMap("myBitRobotMap");
 
-    size_t counter =  robot_joints_vec.size() - 1 - nbv_time_ind;
+    size_t counter =  robot_joints_vec.size() - 1 - swept_vol_start_ind;
 
     // Sweep trajectory volume
     if(robot_joints_vec.size() > 1){
-      for (size_t i = robot_joints_vec.size() - 1; i >= nbv_time_ind; i--){
+      for (size_t i = robot_joints_vec.size() - 1; i >= swept_vol_start_ind; i--){
         robot_joints_vec[i]["x_joint"] = robot_joints_vec[i]["x_joint"] + (0.5 * (float) map_dimensions_.x * voxel_side_length_) ; 
         robot_joints_vec[i]["y_joint"] = robot_joints_vec[i]["y_joint"] + (0.5 * (float) map_dimensions_.y * voxel_side_length_); 
         // gvl_->setRobotConfiguration("hsrRobot", robot_joints_vec[i]);
@@ -979,15 +993,24 @@ namespace gpu_voxels_ros{
       robot_joints_vec[0]["y_joint"] = robot_joints_vec[0]["y_joint"] + (0.5 * (float) map_dimensions_.y * voxel_side_length_); 
     }
 
+    // Make current ind free/remove current volume
+    robot_ptr_->setConfiguration(robot_joints_vec[current_ind]);
+    robotVoxmap_->insertFixedVoxelMeaningMetaPointCloud(*robot_ptr_->getTransformedClouds(), BitVoxelMeaning(eBVM_FREE));
+
 
     // robotVoxmap_->getVoxelTrajCostsToHost(traj_step_map_);
+    // timing::Timer costmap_calc_timer("costmap_calc_timer");
     maintainedProbVoxmap_->calculateCostmap(robotVoxmap_);
-    maintainedProbVoxmap_->getCostmapToHost(host_costmap_);
+    // costmap_calc_timer.Stop();
 
-    robot::JointValueMap query_joint_map = robot_joints_vec[nbv_time_ind];
+    // maintainedProbVoxmap_->getCostmapToHost(host_costmap_);
+
+    robot::JointValueMap query_joint_map = robot_joints_vec[swept_vol_start_ind];
     std::vector<float> costs;
 
     // Primitives local to the current head pose
+    // std::vector<float> pan_deltas = {-1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5,};
+    // std::vector<float> tilt_deltas = {-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75};
     std::vector<float> pan_deltas = {-3.14, -2.0, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.14};
     std::vector<float> tilt_deltas = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
     for (size_t i = 0; i < pan_deltas.size(); i++){
@@ -998,13 +1021,13 @@ namespace gpu_voxels_ros{
 
         query_joint_map["head_tilt_joint"] = robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[j];
         
-        if (query_joint_map["head_pan_joint"] < -3.5 || query_joint_map["head_pan_joint"] > 1.6 ||
+        if (query_joint_map["head_pan_joint"] < -3.0 || query_joint_map["head_pan_joint"] > 3.0 ||
             query_joint_map["head_tilt_joint"] < -1.2 || query_joint_map["head_tilt_joint"] > 0.1)
         {
           cost = -FLT_MAX;
         }
         else{
-          query_joint_map["head_pan_joint"] = std::min(std::max(-3.5, (double) query_joint_map["head_pan_joint"] ), 1.6);
+          query_joint_map["head_pan_joint"] = std::min(std::max(-3.0, (double) query_joint_map["head_pan_joint"] ), 3.0);
           query_joint_map["head_tilt_joint"] = std::min(std::max(-1.20, (double) query_joint_map["head_tilt_joint"] ), 0.1);
           timing::Timer single_view_cost_timer("single_view_cost_timer");
           cost = this->GetConeViewCost(query_joint_map);
@@ -1033,7 +1056,7 @@ namespace gpu_voxels_ros{
     // nbv_joints[1] =  std::min(std::max(-1.20f, tilt_clamped), 0.1f);
 
     // Clamp to the absolute max and min of the joints (or what we set it to at least)
-    nbv_joints[0] =  std::min(std::max(-3.5, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[pan_ind])), 1.6);
+    nbv_joints[0] =  std::min(std::max(-3.0, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[pan_ind])), 3.0);
     nbv_joints[1] =  std::min(std::max(-1.20, (double) (robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[tilt_ind])), 0.1);
     nbv_timer.Stop();
     
