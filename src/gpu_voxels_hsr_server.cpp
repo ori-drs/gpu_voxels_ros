@@ -68,12 +68,14 @@ namespace gpu_voxels_ros{
     ground_sdf_grad_pub_ = node.advertise<visualization_msgs::MarkerArray>("gpu_voxels_ground_sdf_grad", 2000, true);
     cone_flag_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_cone_flags", 1, true);
     traj_sweep_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_traj_steps", 1, true);
-    
+    cone_arrow_pub_ = node.advertise<visualization_msgs::MarkerArray>( "cone_arrows", 1, true);
+
     costmap_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_costmap", 1, true);
 
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &GPUVoxelsHSRServer::PoseCallback, this);
     pcl_sub_ = node.subscribe(pcl_topic_, 10, &GPUVoxelsHSRServer::PointcloudCallback, this);
+
 
     // Generate a GPU-Voxels instance:
     gvl_ = gpu_voxels::GpuVoxels::getInstance();
@@ -233,7 +235,8 @@ namespace gpu_voxels_ros{
         // gvl_->visualizeMap("cleanVoxmapVisual");
 
         // publishRVIZTrajSweepOccupancy(traj_step_map_);
-        // publishRVIZCostmap(host_costmap_);
+        publishRVIZCostmap(host_costmap_);
+        publishRVIZConeRankings();
 
         // publishRVIZUpdateTimes(time_update_map_, 5);
 
@@ -243,7 +246,7 @@ namespace gpu_voxels_ros{
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        timing::Timing::Print(std::cout);
+        // timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
@@ -635,6 +638,77 @@ namespace gpu_voxels_ros{
   
   }
 
+  void GPUVoxelsHSRServer::publishRVIZConeRankings() {
+
+    if (next_cone_robot_joints_.size()<=1)
+    {
+      return;
+    }
+
+    robot::JointValueMap robot_joints_ = next_cone_robot_joints_;
+
+    visualization_msgs::MarkerArray marker_array;
+    marker_array.markers.resize(144);
+    double x, y, z, w;
+
+
+    std::cout << "Publishing cone arrows" << std::endl;
+
+    size_t ctr = 0;
+    for (size_t i = 0; i < pan_deltas_.size(); i++){
+      for (size_t j = 0; j < tilt_deltas_.size(); j++){
+    // for (size_t i = 8; i < 9; i++){
+    //   for (size_t j = 4; j < 5; j++){
+
+        if (cone_costs_[ctr] < 0 ){
+          ctr++;
+          continue;
+        }
+
+        visualization_msgs::Marker marker;
+
+        robot_joints_["head_pan_joint"] =  std::min(std::max(-3.0, (double) (next_cone_robot_joints_["head_pan_joint"] + pan_deltas_[i])), 1.7);
+        robot_joints_["head_tilt_joint"] =  std::min(std::max(-1.20, (double) (next_cone_robot_joints_["head_tilt_joint"] + tilt_deltas_[j])), 0.1);
+        robot_ptr_->setConfigurationNoPclUpdate(robot_joints_);
+        KDL::Frame camera_pose = robot_ptr_->getLink("head_rgbd_sensor_link")->getPose();
+        camera_pose.M.DoRotX(M_PI_2);
+        camera_pose.M.DoRotZ(M_PI_2);
+        camera_pose.M.GetQuaternion(x,y,z,w);
+
+
+        marker.pose.position.x = camera_pose.p[0];
+        marker.pose.position.y = camera_pose.p[1];
+        marker.pose.position.z = camera_pose.p[2];
+
+        // Create a marker  
+        marker.header.frame_id = "odom";
+        marker.type = visualization_msgs::Marker::ARROW;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.scale.x = 0.05 * cone_costs_[ctr];
+        marker.scale.y = 0.01 * cone_costs_[ctr];
+        marker.scale.z = 0.01 * cone_costs_[ctr];
+        marker.ns = "cone_arrows";
+        marker.lifetime = ros::Duration(2);
+        marker.color.a = 1.0;
+        marker.id = ctr;
+        marker.color.r = 1.0f;
+        marker.color.g = 0.0f;
+        marker.color.b = 0.0f;        
+        marker.pose.orientation.w = w;
+        marker.pose.orientation.x = x;
+        marker.pose.orientation.y = y;
+        marker.pose.orientation.z = z;
+        marker_array.markers[ctr] = marker;
+
+        ctr++;
+
+      }
+    }
+
+    cone_arrow_pub_.publish(marker_array);
+
+  }
+
   void GPUVoxelsHSRServer::PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg)
   {
     // std::cout << "PointcloudCallback" << std::endl;
@@ -970,6 +1044,10 @@ namespace gpu_voxels_ros{
     // gvl_->clearMap("myBitRobotMap");
 
     size_t counter =  robot_joints_vec.size() - 1 - swept_vol_start_ind;
+    
+    next_cone_robot_joints_ = robot_joints_vec[0];
+    // next_cone_robot_joints_["x_joint"] = next_cone_robot_joints_["x_joint"] + (0.5 * (float) map_dimensions_.x * voxel_side_length_) ; 
+    // next_cone_robot_joints_["y_joint"] = next_cone_robot_joints_["y_joint"] + (0.5 * (float) map_dimensions_.y * voxel_side_length_); 
 
     // Sweep trajectory volume
     if(robot_joints_vec.size() > 1){
@@ -1003,7 +1081,7 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_->calculateCostmap(robotVoxmap_);
     // costmap_calc_timer.Stop();
 
-    // maintainedProbVoxmap_->getCostmapToHost(host_costmap_);
+    maintainedProbVoxmap_->getCostmapToHost(host_costmap_);
 
     robot::JointValueMap query_joint_map = robot_joints_vec[swept_vol_start_ind];
     std::vector<float> costs;
@@ -1011,27 +1089,30 @@ namespace gpu_voxels_ros{
     // Primitives local to the current head pose
     // std::vector<float> pan_deltas = {-1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5,};
     // std::vector<float> tilt_deltas = {-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75};
-    std::vector<float> pan_deltas = {-3.14, -2.0, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.14};
-    std::vector<float> tilt_deltas = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
-    for (size_t i = 0; i < pan_deltas.size(); i++){
+
+    float max_cost =  -FLT_MAX;
+    float min_cost =  FLT_MAX;
+    for (size_t i = 0; i < pan_deltas_.size(); i++){
       float cost;
       // std::cout << " | " << std::endl;
-      query_joint_map["head_pan_joint"] = robot_joints_vec[0]["head_pan_joint"] + pan_deltas[i];
-      for (size_t j = 0; j < tilt_deltas.size(); j++){
+      query_joint_map["head_pan_joint"] = robot_joints_vec[0]["head_pan_joint"] + pan_deltas_[i];
+      for (size_t j = 0; j < tilt_deltas_.size(); j++){
 
-        query_joint_map["head_tilt_joint"] = robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[j];
+        query_joint_map["head_tilt_joint"] = robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas_[j];
         
-        if (query_joint_map["head_pan_joint"] < -3.0 || query_joint_map["head_pan_joint"] > 3.0 ||
+        if (query_joint_map["head_pan_joint"] < -3.0 || query_joint_map["head_pan_joint"] > 1.7 ||
             query_joint_map["head_tilt_joint"] < -1.2 || query_joint_map["head_tilt_joint"] > 0.1)
         {
           cost = -FLT_MAX;
         }
         else{
-          query_joint_map["head_pan_joint"] = std::min(std::max(-3.0, (double) query_joint_map["head_pan_joint"] ), 3.0);
+          query_joint_map["head_pan_joint"] = std::min(std::max(-3.0, (double) query_joint_map["head_pan_joint"] ), 1.7);
           query_joint_map["head_tilt_joint"] = std::min(std::max(-1.20, (double) query_joint_map["head_tilt_joint"] ), 0.1);
           timing::Timer single_view_cost_timer("single_view_cost_timer");
           cost = this->GetConeViewCost(query_joint_map);
           single_view_cost_timer.Stop();
+          max_cost = std::max(max_cost, cost);
+          min_cost = std::min(min_cost, cost);
         }
 
         costs.push_back(cost);
@@ -1043,8 +1124,8 @@ namespace gpu_voxels_ros{
     }
 
     int min_cost_idx = std::max_element( costs.begin(), costs.end()) - costs.begin();
-    size_t pan_ind = floor((float) min_cost_idx / (float) tilt_deltas.size());
-    size_t tilt_ind = min_cost_idx % tilt_deltas.size();
+    size_t pan_ind = floor((float) min_cost_idx / (float) tilt_deltas_.size());
+    size_t tilt_ind = min_cost_idx % tilt_deltas_.size();
     
     // float pan_clamped = std::max(-0.7f, (float) std::min(pan_deltas[pan_ind], 0.7f));
     // pan_clamped += robot_joints_vec[0]["head_pan_joint"];
@@ -1056,12 +1137,14 @@ namespace gpu_voxels_ros{
     // nbv_joints[1] =  std::min(std::max(-1.20f, tilt_clamped), 0.1f);
 
     // Clamp to the absolute max and min of the joints (or what we set it to at least)
-    nbv_joints[0] =  std::min(std::max(-3.0, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas[pan_ind])), 3.0);
-    nbv_joints[1] =  std::min(std::max(-1.20, (double) (robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas[tilt_ind])), 0.1);
+    nbv_joints[0] =  std::min(std::max(-3.0, (double) (robot_joints_vec[0]["head_pan_joint"] + pan_deltas_[pan_ind])), 1.7);
+    nbv_joints[1] =  std::min(std::max(-1.20, (double) (robot_joints_vec[0]["head_tilt_joint"] + tilt_deltas_[tilt_ind])), 0.1);
     nbv_timer.Stop();
     
-
-
+    cone_costs_ = costs;
+    for(int i=0;i<cone_costs_.size();++i){
+      cone_costs_[i] = (cone_costs_[i] - min_cost) / (max_cost - min_cost);
+    }
         // float pan_joint = -3.839 + i * pan_range_div; 
     // float tilt_joint = -1.570 + j * tilt_range_div;
 

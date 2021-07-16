@@ -70,6 +70,7 @@ namespace gpu_voxels_ros{
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZCostmap(const std::vector<float> &costmap);
+      void publishRVIZConeRankings();
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
@@ -84,7 +85,7 @@ namespace gpu_voxels_ros{
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_;
       ros::Subscriber pcl_sub_, transform_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_;
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, cone_arrow_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
@@ -118,6 +119,10 @@ namespace gpu_voxels_ros{
       float dalpha_ = 1.1*M_PI_4;
       float dtheta_ = 1.3*M_PI_4;
 
+      std::vector<float> pan_deltas_ = {-3.14, -2.0, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.14};
+      std::vector<float> tilt_deltas_ = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
+      std::vector<float> cone_costs_ = std::vector<float>(144);
+      robot::JointValueMap next_cone_robot_joints_;
 
       float max_ray_length_ = 7; // Testing whether this helps clearing
 
