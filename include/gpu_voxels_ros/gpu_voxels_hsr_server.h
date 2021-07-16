@@ -73,7 +73,7 @@ namespace gpu_voxels_ros{
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
-      void GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t nbv_time_ind);
+      void GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t current_ind);
       float GetConeViewCost(robot::JointValueMap robot_joints);
       void publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold);
       void publishRVIZVoxelFlags(const std::vector<bool> &flag_map);
@@ -111,6 +111,8 @@ namespace gpu_voxels_ros{
       // ASUS Xtion Pro Live (HSR)
       float min_ray_length_ = 0.8;
       // float max_ray_length_ = 3.5;
+      
+      size_t ind_delay_ = 2;
 
       // These are the camera specific field of view parametera.
       float dalpha_ = 1.1*M_PI_4;
