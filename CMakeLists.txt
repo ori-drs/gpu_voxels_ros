@@ -29,6 +29,7 @@ src/gpu_voxels_server.cpp
 src/gpu_voxels_signed_server.cpp
 src/gpu_voxels_hsr_server.cpp
 src/gpu_voxels_hsr_server.cpp
+src/composite_sdf_test.cpp
 # include/timing.h
 src/timing.cc
 )
@@ -90,6 +91,20 @@ target_link_libraries (sdf_test
     ${orocos_kdl_LIBRARIES}
     ${roscpp_LIBRARIES}
     ${rospy_LIBRARIES}
+)
+
+add_executable (composite_sdf_test_node src/composite_sdf_test_node.cpp)
+target_link_libraries (composite_sdf_test_node
+    ${Boost_SYSTEM_LIBRARY}
+    ${icl_core_LIBRARIES}
+    ${gpu_voxels_LIBRARIES}
+    ${CUDA_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${CATKIN_LIBRARIES}
+    ${orocos_kdl_LIBRARIES}
+    ${roscpp_LIBRARIES}
+    ${rospy_LIBRARIES}
+    gpu_voxels_ros
 )
 
 
