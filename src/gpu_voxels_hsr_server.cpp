@@ -652,7 +652,7 @@ namespace gpu_voxels_ros{
     double x, y, z, w;
 
 
-    std::cout << "Publishing cone arrows" << std::endl;
+    // std::cout << "Publishing cone arrows" << std::endl;
 
     size_t ctr = 0;
     for (size_t i = 0; i < pan_deltas_.size(); i++){
@@ -773,8 +773,8 @@ namespace gpu_voxels_ros{
         (float) map_pos.z < 0.0 || (float) map_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
     
 
-      std::cout << "Query out of bounds"<< std::endl;
-      std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
+      // std::cout << "Query out of bounds"<< std::endl;
+      // std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
     
       grad[0] = 0;
       grad[1] = 0;
