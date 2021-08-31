@@ -47,6 +47,8 @@ namespace gpu_voxels_ros{
     node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 64);
 
+    recovery_planner_ = RecoveryPlanner(MapDims(map_dimensions_.x, map_dimensions_.y, map_dimensions_.z), voxel_side_length_);
+
     // Iros params
     // node_.param<float>("voxel_side_length", voxel_side_length_, 0.025f);
     // node_.param<int>("map_size_x", (int&) map_dimensions_.x, 448);
@@ -71,6 +73,7 @@ namespace gpu_voxels_ros{
     cone_arrow_pub_ = node.advertise<visualization_msgs::MarkerArray>( "cone_arrows", 1, true);
 
     costmap_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_costmap", 1, true);
+    ground_occ_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("occupancy_2d_map", 1, true);
 
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &GPUVoxelsHSRServer::PoseCallback, this);
@@ -246,10 +249,48 @@ namespace gpu_voxels_ros{
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        // timing::Timing::Print(std::cout);
+        timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
+  }
+
+  void GPUVoxelsHSRServer::getRecoveryPlan(const float safety_margin, const float height_cutoff, const float start_x, const float start_y, const float goal_x, const float goal_y, const uint interp_num){
+    
+    std::vector<bool> occ_map_2d(map_dimensions_.x * map_dimensions_.y);
+    timing::Timer occ_2d_timer("occ_2d_timer");
+    get2DCollisionMap(sdf_map_, occ_map_2d, safety_margin, height_cutoff);
+    occ_2d_timer.Stop();
+    recovery_planner_.updateOccupancyGrid(occ_map_2d);
+    recovery_planner_.plan(start_x + ((0.5 * (float) map_dimensions_.x) * voxel_side_length_), 
+                          start_y + ((0.5 * (float) map_dimensions_.x) * voxel_side_length_), 
+                          goal_x + ((0.5 * (float) map_dimensions_.x) * voxel_side_length_), 
+                          goal_y + ((0.5 * (float) map_dimensions_.x) * voxel_side_length_), 
+                          interp_num);
+    publishRVIZGroundOccupancy(occ_map_2d);
+
+  }
+
+  void GPUVoxelsHSRServer::get2DCollisionMap(const std::vector<float> & sdf_map, std::vector<bool> &occ_map_2d, const float safety_margin, const float height_cutoff){
+  
+    size_t h_cutoff = floor(height_cutoff/voxel_side_length_);
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x){
+      for (size_t y = 0; y < map_dimensions_.y; ++y){
+        
+        size_t ind_2d = y * map_dimensions_.x + x;
+
+        bool occ = 0;
+
+        for (size_t z = 0; z < map_dimensions_.z; ++z){
+          size_t ind_3d = z * map_dimensions_.x * map_dimensions_.y + y * map_dimensions_.x + x;
+          occ = occ || ((sdf_map[ind_3d] < safety_margin) && z <= h_cutoff);
+        }
+
+        occ_map_2d[ind_2d] = occ;
+      }
+    }
+
   }
 
   float GPUVoxelsHSRServer::getPercentageMapExplored() const{
@@ -638,6 +679,36 @@ namespace gpu_voxels_ros{
   
   }
 
+  void GPUVoxelsHSRServer::publishRVIZGroundOccupancy(const std::vector<bool> &occupancy_2d_map) {
+  
+    pcl::PointXYZI pt;
+    pcl::PointCloud<pcl::PointXYZI> cloud;
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x){
+      for (size_t y = 0; y < map_dimensions_.y; ++y){
+          size_t ind = y * map_dimensions_.x + x;
+
+          if (occupancy_2d_map[ind])
+          {            
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = 0;
+            pt.intensity = 1;
+            cloud.push_back(pt);
+          }
+        }
+    }
+    
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "odom";
+    sensor_msgs::PointCloud2 cloud_msg;
+
+    pcl::toROSMsg(cloud, cloud_msg);
+    ground_occ_pub_.publish(cloud_msg);
+
+  }
   void GPUVoxelsHSRServer::publishRVIZConeRankings() {
 
     if (next_cone_robot_joints_.size()<=1)

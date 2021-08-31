@@ -15,6 +15,7 @@ FIND_PACKAGE(roscpp REQUIRED)
 FIND_PACKAGE(rospy REQUIRED)
 FIND_PACKAGE(Eigen3 REQUIRED)
 set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
+find_package(ompl REQUIRED)
 
 find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs)
 
@@ -32,6 +33,7 @@ src/gpu_voxels_hsr_server.cpp
 src/composite_sdf_test.cpp
 # include/timing.h
 src/timing.cc
+src/RecoveryPlanner.cpp
 )
 
 target_link_libraries(gpu_voxels_ros 
@@ -44,6 +46,7 @@ target_link_libraries(gpu_voxels_ros
     ${orocos_kdl_LIBRARIES}
     ${roscpp_LIBRARIES}
     ${rospy_LIBRARIES}
+    ${OMPL_LIBRARIES}
 )
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -59,7 +62,8 @@ include_directories(
     ${roscpp_INCLUDE_DIRS}
     ${rospy_INCLUDE_DIRS}
     ${Eigen3_INCLUDE_DIRS}
-)
+    ${OMPL_INCLUDE_DIRS}
+    )
 
 
 add_definitions(
@@ -119,6 +123,7 @@ target_link_libraries (gpu_voxels_server_node
     ${orocos_kdl_LIBRARIES}
     ${roscpp_LIBRARIES}
     ${rospy_LIBRARIES}
+    ${OMPL_LIBRARIES}
     gpu_voxels_ros
 )
 

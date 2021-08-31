@@ -32,6 +32,9 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
+#include <gpu_voxels_ros/RecoveryPlanner.h>
+
+
 using boost::dynamic_pointer_cast;
 
 using gpu_voxels::voxelmap::ProbVoxelMap;
@@ -61,6 +64,8 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
+      void get2DCollisionMap(const std::vector<float> & sdf_map, std::vector<bool> & occ_map_2d, const float safety_margin, const float height_cutoff);
+      void getRecoveryPlan(const float safety_margin, const float height_cutoff, const float start_x, const float start_y, const float goal_x, const float goal_y, const uint interp_num);
 
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
@@ -71,6 +76,7 @@ namespace gpu_voxels_ros{
       void publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZCostmap(const std::vector<float> &costmap);
       void publishRVIZConeRankings();
+      void publishRVIZGroundOccupancy(const std::vector<bool> &occupancy_2d_map);
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
@@ -85,7 +91,9 @@ namespace gpu_voxels_ros{
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_;
       ros::Subscriber pcl_sub_, transform_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, cone_arrow_pub_;
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, cone_arrow_pub_, ground_occ_pub_;
+
+      RecoveryPlanner recovery_planner_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
