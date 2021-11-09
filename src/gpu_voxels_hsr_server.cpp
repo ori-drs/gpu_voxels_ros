@@ -31,6 +31,7 @@ namespace gpu_voxels_ros{
 
 
     node_.param<std::string>("transform_topic", transform_topic_, "/kinect/vrpn_client/estimated_transform");
+    node_.param<std::string>("traj_pred_topic", traj_pred_topic_, "/traj_predictions");
     // node_.param<std::string>("pcl_topic", pcl_topic_, "/camera/depth_registered/points");
     node_.param<std::string>("pcl_topic", pcl_topic_, "/hsrb/head_rgbd_sensor/depth_registered/rectified_points");
     node_.param<std::string>("sensor_frame", sensor_frame_, "head_rgbd_sensor_rgb_frame");
@@ -78,6 +79,7 @@ namespace gpu_voxels_ros{
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &GPUVoxelsHSRServer::PoseCallback, this);
     pcl_sub_ = node.subscribe(pcl_topic_, 10, &GPUVoxelsHSRServer::PointcloudCallback, this);
+    // traj_pred_sub_ = node.subscribe(traj_pred_topic_, 10, &GPUVoxelsHSRServer::HumanTrajectoryPredictionCallback, this);
 
 
     // Generate a GPU-Voxels instance:
@@ -239,7 +241,7 @@ namespace gpu_voxels_ros{
 
         // publishRVIZTrajSweepOccupancy(traj_step_map_);
         publishRVIZCostmap(host_costmap_);
-        publishRVIZConeRankings();
+        // publishRVIZConeRankings();
 
         // publishRVIZUpdateTimes(time_update_map_, 5);
 
@@ -249,7 +251,7 @@ namespace gpu_voxels_ros{
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        timing::Timing::Print(std::cout);
+        // timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
@@ -709,6 +711,7 @@ namespace gpu_voxels_ros{
     ground_occ_pub_.publish(cloud_msg);
 
   }
+  
   void GPUVoxelsHSRServer::publishRVIZConeRankings() {
 
     if (next_cone_robot_joints_.size()<=1)
@@ -785,6 +788,11 @@ namespace gpu_voxels_ros{
     // std::cout << "PointcloudCallback" << std::endl;
     pointcloud_queue_.push(msg);
     CallbackSync();
+  }
+
+  void GPUVoxelsHSRServer::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
+  {
+    human_traj_latest_ = msg;
   }
 
   double GPUVoxelsHSRServer::GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
@@ -1040,14 +1048,6 @@ namespace gpu_voxels_ros{
     LOGGING_INFO(Gpu_voxels, "File saved successfully" << endl);
   }
 
-  // Constrain angles between -pi and pi
-  float constrainAngle(float x){
-      x = fmod(x + M_PI, 2*M_PI);
-      if (x < 0)
-          x += 2*M_PI;
-      return x - M_PI;
-  }
-
   float GPUVoxelsHSRServer::GetConeViewCost(robot::JointValueMap robot_joints){
     // Get the camera position for a given robot state
     // gvl_->setRobotConfiguration("hsrRobot", robot_joints);
@@ -1087,13 +1087,13 @@ namespace gpu_voxels_ros{
     float theta = constrainAngle(robot_joints["theta_joint"] + robot_joints["head_pan_joint"]); 
     float alpha = robot_joints["head_tilt_joint"]; 
 
-    // These are the camera specific field of view parametera. TODO set these somewhere outside of member functions
-    float dalpha = 1.1*M_PI_4;
-    float dtheta = 1.3*M_PI_4;
+    // // These are the camera specific field of view parametera. TODO set these somewhere outside of member functions
+    // float dalpha = 1.1*M_PI_4;
+    // float dtheta = 1.3*M_PI_4;
 
     // criteria for being inside the cone
     gpu_voxels::Vector3f cam_pos(camera_pose.p[0], camera_pose.p[1], camera_pose.p[2]);
-    gpu_voxels::Vector4f cam_fov(constrainAngle(theta - dtheta/2), constrainAngle(theta + dtheta/2), constrainAngle(alpha - dalpha/2), constrainAngle(alpha + dalpha/2));
+    gpu_voxels::Vector4f cam_fov(constrainAngle(theta - dtheta_/2), constrainAngle(theta + dtheta_/2), constrainAngle(alpha - dalpha_/2), constrainAngle(alpha + dalpha_/2));
 
     maintainedProbVoxmap_->setConeFlags(cam_pos, cam_fov);
   }

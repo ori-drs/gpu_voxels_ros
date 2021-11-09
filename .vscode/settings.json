@@ -86,6 +86,22 @@
         "set": "cpp",
         "string": "cpp",
         "mixinvector": "cpp",
-        "timer": "cpp"
+        "timer": "cpp",
+        "quat": "cpp",
+        "vec3b": "cpp",
+        "vec3d": "cpp",
+        "vec3f": "cpp",
+        "vec3i": "cpp",
+        "vec3s": "cpp",
+        "vec3ub": "cpp",
+        "vec3ui": "cpp",
+        "vec3us": "cpp",
+        "vec4b": "cpp",
+        "vec4d": "cpp",
+        "vec4f": "cpp",
+        "vec4i": "cpp",
+        "vec4s": "cpp",
+        "vec4ui": "cpp",
+        "vec4us": "cpp"
     }
 }

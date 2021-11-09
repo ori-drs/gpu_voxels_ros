@@ -9,12 +9,12 @@
  * \date    2016-12-24
  */
 //----------------------------------------------------------------------
-#include <gpu_voxels_ros/composite_sdf_test.h>
+#include <gpu_voxels_ros/live_composite_sdf.h>
 #include <gpu_voxels_ros/timing.h>
 
 namespace gpu_voxels_ros{
 
-  SDFCompositer::SDFCompositer(ros::NodeHandle& node) {
+  LiveCompositeSDF::LiveCompositeSDF(ros::NodeHandle& node) {
     node_ = node;
 
     T_B_C_ = Matrix4f(1, 0, 0, 0,
@@ -31,7 +31,6 @@ namespace gpu_voxels_ros{
 
     node_.param<std::string>("transform_topic", transform_topic_, "/kinect/vrpn_client/estimated_transform");
     node_.param<std::string>("traj_pred_topic", traj_pred_topic_, "/traj_predictions");
-
     node_.param<std::string>("pcl_topic", pcl_topic_, "/hsrb/head_rgbd_sensor/depth_registered/rectified_points");
     node_.param<std::string>("sensor_frame", sensor_frame_, "head_rgbd_sensor_rgb_frame");
 
@@ -40,18 +39,21 @@ namespace gpu_voxels_ros{
     node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 64);
 
+    num_sdfs_ = 20;
+
     map_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_pointcloud", 1, true);
     ground_sdf_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_ground_sdf", 1, true);
     update_time_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_update_times", 1, true);
     ground_sdf_grad_pub_ = node.advertise<visualization_msgs::MarkerArray>("gpu_voxels_ground_sdf_grad", 2000, true);
     cone_flag_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_cone_flags", 1, true);
     traj_sweep_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_traj_steps", 1, true);
-    
+    distance_field_2d_pub_= node.advertise<std_msgs::Float32MultiArray>("distance_field_2d", 1, true);
     costmap_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_costmap", 1, true);
 
 
-    transform_sub_ = node.subscribe(transform_topic_, 10, &SDFCompositer::PoseCallback, this);
-    pcl_sub_ = node.subscribe(pcl_topic_, 10, &SDFCompositer::PointcloudCallback, this);
+    transform_sub_ = node.subscribe(transform_topic_, 10, &LiveCompositeSDF::PoseCallback, this);
+    pcl_sub_ = node.subscribe(pcl_topic_, 10, &LiveCompositeSDF::PointcloudCallback, this);
+    traj_pred_sub_ = node.subscribe(traj_pred_topic_, 10, &LiveCompositeSDF::HumanTrajectoryPredictionCallback, this);
 
     // Generate a GPU-Voxels instance:
     gvl_ = gpu_voxels::GpuVoxels::getInstance();
@@ -62,7 +64,8 @@ namespace gpu_voxels_ros{
     gvl_->addMap(MT_PROBAB_VOXELMAP, "myRobotMap");
     gvl_->addMap(MT_PROBAB_VOXELMAP, "cleanVoxmap");
     gvl_->addMap(MT_PROBAB_VOXELMAP, "cleanVoxmapVisual");
-    // gvl_->addMap(MT_BITVECTOR_VOXELMAP, "myBitRobotMap");
+
+    distvoxelmap_2d_ = boost::shared_ptr<DistanceVoxelMap> (new DistanceVoxelMap(Vector3ui(map_dimensions_.x, map_dimensions_.y, 1), voxel_side_length_, MT_DISTANCE_VOXELMAP));
 
     // Add the robot model
     gvl_->addRobot("hsrRobot", "hsr/originals/mod_hsrb.urdf", true);
@@ -77,30 +80,53 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
     signedDistanceMap_ = dynamic_pointer_cast<InheritSignedDistanceVoxelMap>(pbaDistanceVoxmap_);
-    // cleanVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmap"));
-    // cleanVoxmapVisual_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmapVisual"));
 
-    // sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
     sdf_map_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
-    // time_update_map_ = std::vector<uint>(maintainedProbVoxmap_->getVoxelMapSize());
-    
-    // occupancy_map_ = std::vector<int>(pbaDistanceVoxmap_->getVoxelMapSize());
-    // flag_map_ = std::vector<bool>(maintainedProbVoxmap_->getVoxelMapSize(), false);
-
-    // traj_step_map_ = std::vector<int>(maintainedProbVoxmap_->getVoxelMapSize());
 
     host_costmap_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
-
-
+    host_2d_dist_ = std::vector<float>(distvoxelmap_2d_->getVoxelMapSize());
+    
     maintainedProbVoxmap_->clearMap();
     maintainedProbVoxmap_->resetTimeSteps();
-    // maintainedProbVoxmap_->getVoxelUpdateTimesToHost(time_update_map_);
-    // float test = getPercentageMapExplored();
+
+    // Generate the human sdf cylinder 
+    human_dims_ = Vector3ui(64,64,64);
+    cylinder_base_corner_ = Vector3ui(128-64/2+48,128-64/2,0);
+    // Vector3f cylinder_center(64 * 0.5 * voxel_side_length_,
+    //                         64 * 0.5 * voxel_side_length_, 
+    //                         1.0);
+    Vector3f cylinder_center(64 * 0.5 * voxel_side_length_,
+                            64 * 0.5 * voxel_side_length_, 
+                            1.0);
+    // cylinder_base_corner_ =  (x_person  - 64 * 0.5 * voxel_side_length_,
+    //                           y_person  - 64 * 0.5 * voxel_side_length_,
+    //                           0)
+ 
+    std::vector<Vector3f> cylinder_points = gpu_voxels::geometry_generation::createCylinderOfPoints(cylinder_center, 0.3f, 2.0f, voxel_side_length_);
+
+    human_shared_ptr_ = boost::shared_ptr<DistanceVoxelMap>(new DistanceVoxelMap(human_dims_, voxel_side_length_, MT_DISTANCE_VOXELMAP));
+
+    human_shared_ptr_->insertPointCloud(cylinder_points, eBVM_OCCUPIED);
+    human_shared_ptr_->parallelBanding3D();
+
+    // Create vector of sdfs (for composite)
+    std::cout << "Instantiating " << num_sdfs_ << " composite sdfs..." << std::endl;
+
+    composite_sdf_ptrs_ = std::vector<std::shared_ptr<std::vector<float>>>(num_sdfs_);
+  
+    for (size_t i = 0; i < num_sdfs_; i++)
+    {
+      composite_sdf_ptrs_[i] = std::shared_ptr<std::vector<float>>(new std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize()));
+    }
+
+    pbaDistanceVoxmap_->addHuman(human_shared_ptr_, human_dims_);
 
     std::cout << "HSR Server Ready" << std::endl;
   }
 
-  void SDFCompositer::CallbackSync(){
+  void LiveCompositeSDF::CallbackSync(){
+
+    // std::cout << "Callback executed" << std::endl;
 
     timing::Timer sync_callback_timer("CallbackSync");
 
@@ -142,7 +168,6 @@ namespace gpu_voxels_ros{
 
         Vector3f camera_pos = Vector3f(sync_tf_.a14, sync_tf_.a24, sync_tf_.a34)/sync_tf_.a44;
 
-        // std::cout << camera_pos << std::endl;
         update_transform_timer.Stop();
 
         timing::Timer transform_pc_timer("ResizePC");
@@ -166,66 +191,62 @@ namespace gpu_voxels_ros{
         
         transform_pc_timer.Stop();
 
-        timing::Timer update_esdf_timer("UpdateESDF");
 
         pbaDistanceVoxmap_->clearMap();
-        // cleanVoxmap_->clearMap();
+        distvoxelmap_2d_->clearMap();
 
         maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
-
         
-        // maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 2); //erode only "lonely voxels" without occupied neighbors
-        // maintainedProbVoxmap_->erodeLonelyInto(*cleanVoxmap_); //erode only "lonely voxels" without occupied neighbors
-        // signedDistanceMap_->occupancyMerge(cleanVoxmap_, 0.75, 0.74999);
-        signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
 
+
+        // Get a 2D distance field for use in human trajectory prediction
+        distvoxelmap_2d_->merge2DOccupied(maintainedProbVoxmap_, Vector3ui(0),  0.75, 2);
+        distvoxelmap_2d_->parallelBanding3D(1, 1, 4, PBA_DEFAULT_M1_BLOCK_SIZE, PBA_DEFAULT_M2_BLOCK_SIZE, PBA_DEFAULT_M3_BLOCK_SIZE, 1);
+        distvoxelmap_2d_->getUnsignedDistancesToHost(host_2d_dist_); 
+
+        // timing::Timer update_esdf_timer("UpdateESDF");
+        signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
         signedDistanceMap_->parallelBanding3DUnsigned();
 
-        update_esdf_timer.Stop();
+        // update_esdf_timer.Stop();
 
-        timing::Timer transfer_timer("HostRetrieval");
-        // maintainedProbVoxmap_->getVoxelUpdateTimesToHost(time_update_map_);
+        // timing::Timer static_sdf_timer("StaticSDF");
         
-        pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
+        pbaDistanceVoxmap_->computeStaticSDF();
 
+        // static_sdf_timer.Stop();
 
-        transfer_timer.Stop();
+        // timing::Timer composite_timer("Compositing");
+
+        // for (size_t i = 0; i < num_sdfs_; i++)
+        // {
+        //   pbaDistanceVoxmap_->compositeSDFReinit();
+        //   pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
+        //   pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[i]));
+        // }
+        // composite_timer.Stop();
+
+        pbaDistanceVoxmap_->compositeSDFReinit();
+        pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
+        pbaDistanceVoxmap_->getCompositeSDFToHost(sdf_map_);
+
+        // transfer_timer.Stop();
         sync_callback_timer.Stop();
         pointcloud_queue_.pop();
 
-        
-        // publishRVIZOccupancy(sdf_grad_map_);
-        // publishRVIZGroundSDF(sdf_grad_map_);
-
-        // maintainedProbVoxmap_->getVoxelFlagsToHost(flag_map_);
-        // publishRVIZVoxelFlags(flag_map_);
-       
-        // pbaDistanceVoxmapVisual_->clone(*(pbaDistanceVoxmap_.get()));
-        // cleanVoxmapVisual_->clone(*(cleanVoxmap_.get()));
-        // gvl_->visualizeMap("myRobotMap");
-        // gvl_->visualizeMap("pbaDistanceVoxmapVisual");
-        // gvl_->visualizeMap("myBitRobotMap");
-        // gvl_->visualizeMap("cleanVoxmapVisual");
-
-        // publishRVIZTrajSweepOccupancy(traj_step_map_);
-        // publishRVIZCostmap(host_costmap_);
-
-        // publishRVIZUpdateTimes(time_update_map_, 5);
-
         publishRVIZGroundSDF(sdf_map_);
         publishRVIZOccupancy(sdf_map_);
+        publish2DDistanceField(host_2d_dist_);
 
 
-        // publishRVIZOccupancy(occupancy_map_);
-        // std::cout << "Finished publishing" << std::endl;
-        timing::Timing::Print(std::cout);
+        // timing::Timing::Print(std::cout);
 
     }
-    // publishRVIZGroundSDFGrad(sdf_grad_map_);
+
   }
 
-  float SDFCompositer::getPercentageMapExplored() const{
+  float LiveCompositeSDF::getPercentageMapExplored() const{
     // uint max_val = 0;
 
     // for (size_t x = 0; x < map_dimensions_.x; ++x){
@@ -243,7 +264,17 @@ namespace gpu_voxels_ros{
     return (float) voxels_observed / (float) maintainedProbVoxmap_->getVoxelMapSize();
   }
 
-  void SDFCompositer::publishRVIZVoxelFlags(const std::vector<bool> &flag_map) {
+  void LiveCompositeSDF::publish2DDistanceField(const std::vector<float> &distance_field_2d) {
+    // std::cout << "publish2DDistanceField" << std::endl;
+
+// map_dimensions_.x,map_dimensions_.y
+		std_msgs::Float32MultiArray array;
+    array.data = distance_field_2d;
+    // array.layout = distance_field_2d;
+    distance_field_2d_pub_.publish(array);
+  }
+
+  void LiveCompositeSDF::publishRVIZVoxelFlags(const std::vector<bool> &flag_map) {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -280,7 +311,7 @@ namespace gpu_voxels_ros{
     cone_flag_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZCostmap(const std::vector<float> &costmap) {
+  void LiveCompositeSDF::publishRVIZCostmap(const std::vector<float> &costmap) {
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
 
@@ -318,7 +349,7 @@ namespace gpu_voxels_ros{
     costmap_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold) {
+  void LiveCompositeSDF::publishRVIZUpdateTimes(const std::vector<uint16_t> &time_map, uint16_t threshold) {
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
 
@@ -348,7 +379,7 @@ namespace gpu_voxels_ros{
     update_time_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map) {
+  void LiveCompositeSDF::publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map) {
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
  
@@ -386,7 +417,7 @@ namespace gpu_voxels_ros{
     traj_sweep_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZOccupancy(const std::vector<int> &occupancy_map) {
+  void LiveCompositeSDF::publishRVIZOccupancy(const std::vector<int> &occupancy_map) {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -415,7 +446,7 @@ namespace gpu_voxels_ros{
     map_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZOccupancy(const std::vector<float> &sdf_map) {
+  void LiveCompositeSDF::publishRVIZOccupancy(const std::vector<float> &sdf_map) {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -444,7 +475,7 @@ namespace gpu_voxels_ros{
     map_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
+  void LiveCompositeSDF::publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -473,7 +504,7 @@ namespace gpu_voxels_ros{
     map_pub_.publish(cloud_msg);
   }
 
-  void SDFCompositer::publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
+  void LiveCompositeSDF::publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
   
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
@@ -517,7 +548,7 @@ namespace gpu_voxels_ros{
 
   }
 
-  void SDFCompositer::publishRVIZGroundSDF(const std::vector<float> &sdf_map) {
+  void LiveCompositeSDF::publishRVIZGroundSDF(const std::vector<float> &sdf_map) {
   
     pcl::PointXYZI pt;
     pcl::PointCloud<pcl::PointXYZI> cloud;
@@ -561,7 +592,7 @@ namespace gpu_voxels_ros{
 
   }
 
-  void SDFCompositer::publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
+  void LiveCompositeSDF::publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map) {
 
     visualization_msgs::MarkerArray marker_array;
     // marker_array.markers.resize(map_dimensions_.x * map_dimensions_.y);
@@ -611,14 +642,19 @@ namespace gpu_voxels_ros{
   
   }
 
-  void SDFCompositer::PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg)
+  void LiveCompositeSDF::PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg)
   {
     // std::cout << "PointcloudCallback" << std::endl;
     pointcloud_queue_.push(msg);
     CallbackSync();
   }
 
-  double SDFCompositer::GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
+  void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
+  {
+    human_traj_latest_ = msg;
+  }
+
+  double LiveCompositeSDF::GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
     // std::cout << "requesting GetDistanceAndGradient..." << std::endl;
     // std::cout << 
     gpu_voxels::Vector3f query_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
@@ -661,7 +697,7 @@ namespace gpu_voxels_ros{
     return sdf_grad_map_[lin_ind].sdf;
   }
 
-  double SDFCompositer::GetTrilinearDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
+  double LiveCompositeSDF::GetTrilinearDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const{
 
     gpu_voxels::Vector3f map_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
                                   pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
@@ -726,8 +762,117 @@ namespace gpu_voxels_ros{
         (hx-float_ind.x)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(l.x, h.y, h.z) +
         (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(h.x, h.y, h.z));
   }
+  
+  double LiveCompositeSDF::GetDistanceAndGradientIndexed(const Eigen::Vector3d &pos, Eigen::Vector3d &grad, size_t t_index) const{
+    // std::cout << "requesting GetDistanceAndGradient..." << std::endl;
+    // std::cout << 
+    gpu_voxels::Vector3f query_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
+                                  pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
+                                  pos[2]);
 
-  double SDFCompositer::GetDistance(const Eigen::Vector3d &pos) const{
+
+    query_pos.z = std::max((float) 0, query_pos.z);
+    
+    if( (float) query_pos.x < 0.0 || (float) query_pos.x >= (float) map_dimensions_.x * voxel_side_length_|| 
+        (float) query_pos.y < 0.0 || (float) query_pos.y >= (float) map_dimensions_.y * voxel_side_length_|| 
+        (float) query_pos.z < 0.0 || (float) query_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
+    
+
+      std::cout << "Query out of bounds"<< std::endl;
+      std::cout << "\t query_pos: \t " << "x:" << query_pos.x << "\t " << "y:" << query_pos.y << "\t "<< "z:" << query_pos.z << "\t "<< std::endl;
+    
+      grad[0] = 0;
+      grad[1] = 0;
+      grad[2] = 0;
+      return 0.0;
+
+    } 
+
+    gpu_voxels::Vector3ui coords = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, query_pos);
+
+    // std::cout << "Coords: \t " << "x:" << coords.x << "\t " << "y:" << coords.y << "\t "<< "z:" << coords.z << "\t "<< std::endl;
+
+    uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, coords);
+
+    grad[0] = (composite_sdf_grad_ptrs_[t_index])->at(lin_ind).x/voxel_side_length_;
+    grad[1] = (composite_sdf_grad_ptrs_[t_index])->at(lin_ind).y/voxel_side_length_;
+    grad[2] = (composite_sdf_grad_ptrs_[t_index])->at(lin_ind).z/voxel_side_length_;
+
+    // if( (float) query_pos.z < 0.4){
+    //   grad[2] = sdf_grad_map_[lin_ind].z;
+    // }
+
+
+    return (composite_sdf_grad_ptrs_[t_index])->at(lin_ind).sdf;
+  }
+
+  double LiveCompositeSDF::GetTrilinearDistanceAndGradientIndexed(const Eigen::Vector3d &pos, Eigen::Vector3d &grad, size_t t_index) const{
+
+    gpu_voxels::Vector3f map_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
+                                  pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
+                                  pos[2]);
+
+
+    map_pos.z = std::max((float) 0, map_pos.z);
+    
+    if( (float) map_pos.x < 0.0 || (float) map_pos.x >= (float) map_dimensions_.x * voxel_side_length_|| 
+        (float) map_pos.y < 0.0 || (float) map_pos.y >= (float) map_dimensions_.y * voxel_side_length_|| 
+        (float) map_pos.z < 0.0 || (float) map_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
+    
+
+      std::cout << "Query out of bounds"<< std::endl;
+      std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
+    
+      grad[0] = 0;
+      grad[1] = 0;
+      grad[2] = 0;
+      return 0.0;
+
+    } 
+
+    // In bounds
+    
+    gpu_voxels::Vector3f float_ind = map_pos/voxel_side_length_;
+    gpu_voxels::Vector3ui l = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos);
+    // gpu_voxels::Vector3ui h = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos + gpu_voxels::Vector3f(voxel_side_length_, voxel_side_length_, voxel_side_length_));
+    gpu_voxels::Vector3ui h = l + gpu_voxels::Vector3ui(1, 1, 1);
+
+    const float lx = (float) l.x, ly = (float) l.y, lz = (float) l.z; 
+    const float hx = (float) h.x, hy = (float) h.y, hz = (float) h.z;
+
+    // Now find the gradient
+
+
+    grad[0] = (hy-float_ind.y)*(hz-float_ind.z) * (QueryDistanceIndexed(h.x, l.y, l.z, t_index)-QueryDistanceIndexed(l.x, l.y, l.z, t_index)) +
+              (float_ind.y-ly)*(hz-float_ind.z) * (QueryDistanceIndexed(h.x, h.y, l.z, t_index)-QueryDistanceIndexed(l.x, h.y, l.z, t_index)) +
+              (hy-float_ind.y)*(float_ind.z-lz) * (QueryDistanceIndexed(h.x, l.y, h.z, t_index)-QueryDistanceIndexed(l.x, l.y, h.z, t_index)) +
+              (float_ind.y-ly)*(float_ind.z-lz) * (QueryDistanceIndexed(h.x, h.y, h.z, t_index)-QueryDistanceIndexed(l.x, h.y, h.z, t_index));
+
+    grad[1] = (hx-float_ind.x)*(hz-float_ind.z) * (QueryDistanceIndexed(l.x, h.y, l.z, t_index)-QueryDistanceIndexed(l.x, l.y, l.z, t_index)) +
+              (float_ind.x-lx)*(hz-float_ind.z) * (QueryDistanceIndexed(h.x, h.y, l.z, t_index)-QueryDistanceIndexed(h.x, l.y, l.z, t_index)) +
+              (hx-float_ind.x)*(float_ind.z-lz) * (QueryDistanceIndexed(l.x, h.y, h.z, t_index)-QueryDistanceIndexed(l.x, l.y, h.z, t_index)) +
+              (float_ind.x-lx)*(float_ind.z-lz) * (QueryDistanceIndexed(h.x, h.y, h.z, t_index)-QueryDistanceIndexed(h.x, l.y, h.z, t_index));
+
+    grad[2] = (hx-float_ind.x)*(hy-float_ind.y) * (QueryDistanceIndexed(l.x, l.y, h.z, t_index)-QueryDistanceIndexed(l.x, l.y, l.z, t_index)) +
+              (float_ind.x-lx)*(hy-float_ind.y) * (QueryDistanceIndexed(h.x, l.y, h.z, t_index)-QueryDistanceIndexed(h.x, l.y, l.z, t_index)) +
+              (hx-float_ind.x)*(float_ind.y-ly) * (QueryDistanceIndexed(l.x, h.y, h.z, t_index)-QueryDistanceIndexed(l.x, h.y, l.z, t_index)) +
+              (float_ind.x-lx)*(float_ind.y-ly) * (QueryDistanceIndexed(h.x, h.y, h.z, t_index)-QueryDistanceIndexed(h.x, h.y, l.z, t_index));
+    
+    
+    // Now find the distance
+
+    return (double)
+        ((hx-float_ind.x)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistanceIndexed(l.x, l.y, l.z, t_index) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistanceIndexed(h.x, l.y, l.z, t_index) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistanceIndexed(l.x, h.y, l.z, t_index) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistanceIndexed(h.x, h.y, l.z, t_index) +
+        (hx-float_ind.x)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistanceIndexed(l.x, l.y, h.z, t_index) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistanceIndexed(h.x, l.y, h.z, t_index) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistanceIndexed(l.x, h.y, h.z, t_index) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistanceIndexed(h.x, h.y, h.z, t_index));
+  }
+
+  double LiveCompositeSDF::GetDistance(const Eigen::Vector3d &pos) const{
 
     gpu_voxels::Vector3f query_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
                                   pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
@@ -753,14 +898,21 @@ namespace gpu_voxels_ros{
     return sdf_grad_map_[lin_ind].sdf;
   }
 
-  double SDFCompositer::QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const{
+  double LiveCompositeSDF::QueryDistanceIndexed(uint32_t xi, uint32_t yi, uint32_t zi, size_t t_index) const{
+
+    uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, gpu_voxels::Vector3ui(xi, yi, zi));
+    // return sdf_grad_map_[lin_ind].sdf;
+    return (composite_sdf_ptrs_[t_index])->at(lin_ind);
+  }
+
+  double LiveCompositeSDF::QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const{
 
     uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, gpu_voxels::Vector3ui(xi, yi, zi));
     // return sdf_grad_map_[lin_ind].sdf;
     return sdf_map_[lin_ind];
   }
 
-  double SDFCompositer::GetTrilinearDistance(const Eigen::Vector3d &pos) const{
+  double LiveCompositeSDF::GetTrilinearDistance(const Eigen::Vector3d &pos) const{
     
     //  TODO - Is this needed?
     // pos.z = std::max((float) 0, pos.z);
@@ -799,7 +951,46 @@ namespace gpu_voxels_ros{
         (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistance(h.x, h.y, h.z));
   }
 
-  void SDFCompositer::PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg) {
+  double LiveCompositeSDF::GetTrilinearDistanceIndexed(const Eigen::Vector3d &pos, size_t t_index) const{
+    
+    //  TODO - Is this needed?
+    // pos.z = std::max((float) 0, pos.z);
+
+    gpu_voxels::Vector3f map_pos(pos[0] + (0.5 * (float) map_dimensions_.x * voxel_side_length_), 
+                                  pos[1] + (0.5 * (float) map_dimensions_.y * voxel_side_length_), 
+                                  pos[2]);
+    
+    if(  map_pos.x < 0.0 ||  map_pos.x >= (float) map_dimensions_.x * voxel_side_length_ || 
+         map_pos.y < 0.0 ||  map_pos.y >= (float) map_dimensions_.y * voxel_side_length_ || 
+         map_pos.z < 0.0 ||  map_pos.z >= (float) map_dimensions_.z * voxel_side_length_ ){
+
+      std::cout << "Query out of bounds"<< std::endl;
+
+      return 0.0;
+
+    } 
+
+    // In bounds so now find the distance
+
+    gpu_voxels::Vector3f float_ind = map_pos/voxel_side_length_;
+    gpu_voxels::Vector3ui l = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos);
+    gpu_voxels::Vector3ui h = gpu_voxels::voxelmap::mapToVoxels(voxel_side_length_, map_pos + gpu_voxels::Vector3f(voxel_side_length_, voxel_side_length_, voxel_side_length_));
+
+    const float lx = (float) l.x, ly = (float) l.y, lz = (float) l.z; 
+    const float hx = (float) h.x, hy = (float) h.y, hz = (float) h.z;
+
+    return (double)
+        ((hx-float_ind.x)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistanceIndexed(l.x, l.y, l.z, t_index) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(hz-float_ind.z)*QueryDistanceIndexed(h.x, l.y, l.z, t_index) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistanceIndexed(l.x, h.y, l.z, t_index) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(hz-float_ind.z)*QueryDistanceIndexed(h.x, h.y, l.z, t_index) +
+        (hx-float_ind.x)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistanceIndexed(l.x, l.y, h.z, t_index) +
+        (float_ind.x-lx)*(hy-float_ind.y)*(float_ind.z-lz)*QueryDistanceIndexed(h.x, l.y, h.z, t_index) +
+        (hx-float_ind.x)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistanceIndexed(l.x, h.y, h.z, t_index) +
+        (float_ind.x-lx)*(float_ind.y-ly)*(float_ind.z-lz)*QueryDistanceIndexed(h.x, h.y, h.z, t_index));
+  }
+
+  void LiveCompositeSDF::PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg) {
     // std::cout << "PoseCallback" << std::endl;
 
     Vector3f camera_pos = Vector3f(msg->transform.translation.x,
@@ -825,7 +1016,7 @@ namespace gpu_voxels_ros{
 
   }
 
-  void SDFCompositer::SaveSDFToFile(const std::string filepath){
+  void LiveCompositeSDF::SaveSDFToFile(const std::string filepath){
         // Save the GPU-Voxels Occupancy to file
     std::ofstream savefile;
     savefile.open(filepath, std::fstream::out);
@@ -848,7 +1039,7 @@ namespace gpu_voxels_ros{
     LOGGING_INFO(Gpu_voxels, "File saved successfully" << endl);
   }
 
-  void SDFCompositer::SaveOccupancyToFile(const std::string filepath){
+  void LiveCompositeSDF::SaveOccupancyToFile(const std::string filepath){
         // Save the GPU-Voxels Occupancy to file
     std::ofstream savefile;
     savefile.open(filepath, std::fstream::out);
@@ -871,7 +1062,7 @@ namespace gpu_voxels_ros{
     LOGGING_INFO(Gpu_voxels, "File saved successfully" << endl);
   }
 
-  float SDFCompositer::GetConeViewCost(robot::JointValueMap robot_joints){
+  float LiveCompositeSDF::GetConeViewCost(robot::JointValueMap robot_joints){
     // Get the camera position for a given robot state
     // gvl_->setRobotConfiguration("hsrRobot", robot_joints);
     robot_ptr_->setConfigurationNoPclUpdate(robot_joints);
@@ -898,7 +1089,7 @@ namespace gpu_voxels_ros{
     return cost;
   }
 
-  void SDFCompositer::SetConeFlags(robot::JointValueMap robot_joints){
+  void LiveCompositeSDF::SetConeFlags(robot::JointValueMap robot_joints){
     // gvl_->setRobotConfiguration("hsrRobot", robot_joints);
     robot_ptr_->setConfigurationNoPclUpdate(robot_joints);
 
@@ -921,7 +1112,7 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_->setConeFlags(cam_pos, cam_fov);
   }
 
-  void SDFCompositer::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t current_ind){
+  void LiveCompositeSDF::GetNBV(std::vector<robot::JointValueMap> robot_joints_vec, float (&nbv_joints)[2], const size_t current_ind){
     // LOGGING_INFO(Gpu_voxels, "GPUVoxelsHSRServer::GetNBV" << endl);
 
     // Camera limits 
