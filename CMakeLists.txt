@@ -16,12 +16,13 @@ FIND_PACKAGE(rospy REQUIRED)
 FIND_PACKAGE(Eigen3 REQUIRED)
 set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 find_package(ompl REQUIRED)
+# find_package(finean_msgs REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs finean_msgs)
 
 
 # Must be called before adding libraries
-catkin_package(     INCLUDE_DIRS include
+catkin_package(     INCLUDE_DIRS include 
                     LIBRARIES gpu_voxels_ros
 )
 
@@ -31,6 +32,8 @@ src/gpu_voxels_signed_server.cpp
 src/gpu_voxels_hsr_server.cpp
 src/gpu_voxels_hsr_server.cpp
 src/composite_sdf_test.cpp
+src/live_composite_sdf.cpp
+src/utils.cpp
 # include/timing.h
 src/timing.cc
 src/RecoveryPlanner.cpp
@@ -47,7 +50,8 @@ target_link_libraries(gpu_voxels_ros
     ${roscpp_LIBRARIES}
     ${rospy_LIBRARIES}
     ${OMPL_LIBRARIES}
-)
+    ${finean_msgs_LIBRARIES}
+    )
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
@@ -63,6 +67,7 @@ include_directories(
     ${rospy_INCLUDE_DIRS}
     ${Eigen3_INCLUDE_DIRS}
     ${OMPL_INCLUDE_DIRS}
+    ${finean_msgs_INCLUDE_DIRS}
     )
 
 
@@ -111,6 +116,19 @@ target_link_libraries (composite_sdf_test_node
     gpu_voxels_ros
 )
 
+add_executable (live_composite_sdf_test_node src/live_composite_sdf_test_node.cpp)
+target_link_libraries (live_composite_sdf_test_node
+    ${Boost_SYSTEM_LIBRARY}
+    ${icl_core_LIBRARIES}
+    ${gpu_voxels_LIBRARIES}
+    ${CUDA_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${CATKIN_LIBRARIES}
+    ${orocos_kdl_LIBRARIES}
+    ${roscpp_LIBRARIES}
+    ${rospy_LIBRARIES}
+    gpu_voxels_ros
+)
 
 add_executable (gpu_voxels_server_node src/gpu_voxels_server_node.cpp)
 target_link_libraries (gpu_voxels_server_node

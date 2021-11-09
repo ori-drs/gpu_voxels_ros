@@ -32,6 +32,11 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
+#include <finean_msgs/HumanTrajectoryPrediction.h>
+
+#include <gpu_voxels_ros/utils.h>
+
+
 using boost::dynamic_pointer_cast;
 
 using gpu_voxels::voxelmap::ProbVoxelMap;

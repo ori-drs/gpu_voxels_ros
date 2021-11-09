@@ -33,6 +33,9 @@
 #include <visualization_msgs/Marker.h>
 
 #include <gpu_voxels_ros/RecoveryPlanner.h>
+#include <gpu_voxels_ros/utils.h>
+
+#include <finean_msgs/HumanTrajectoryPrediction.h>
 
 
 using boost::dynamic_pointer_cast;
@@ -141,6 +144,8 @@ namespace gpu_voxels_ros{
 
       std::queue<std::tuple<ros::Time, Matrix4f>> cam_transform_queue_;
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
+      // std::queue<finean_msgs::HumanTrajectoryPrediction::ConstPtr> human_traj_queue_;
+      finean_msgs::HumanTrajectoryPrediction::ConstPtr human_traj_latest_;
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;
