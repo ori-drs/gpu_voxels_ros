@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     elapsed = end - begin;
     // std::cout << elapsed.count() - 60 << std::endl;
 
-    if(elapsed.count() - 60 >= 0){
+    if(elapsed.count() - 240 >= 0){
       break;
     }
 

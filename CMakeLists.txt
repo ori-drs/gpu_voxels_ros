@@ -27,9 +27,6 @@ catkin_package(     INCLUDE_DIRS include
 )
 
 add_library(gpu_voxels_ros  
-src/gpu_voxels_server.cpp
-src/gpu_voxels_signed_server.cpp
-src/gpu_voxels_hsr_server.cpp
 src/gpu_voxels_hsr_server.cpp
 src/composite_sdf_test.cpp
 src/live_composite_sdf.cpp
@@ -144,53 +141,6 @@ target_link_libraries (gpu_voxels_server_node
     ${OMPL_LIBRARIES}
     gpu_voxels_ros
 )
-
-add_executable (gpu_voxels_signed_server_node src/gpu_voxels_signed_server_node.cpp)
-target_link_libraries (gpu_voxels_signed_server_node
-    ${Boost_SYSTEM_LIBRARY}
-    ${icl_core_LIBRARIES}
-    ${gpu_voxels_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${PCL_LIBRARIES}
-    ${CATKIN_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
-    ${roscpp_LIBRARIES}
-    ${rospy_LIBRARIES}
-    gpu_voxels_ros
-)
-
-
-# Cow and lady testing
-
-add_executable (signed_test_node src/cow_and_lady_testing/signed_test_node.cpp)
-target_link_libraries (signed_test_node
-    ${Boost_SYSTEM_LIBRARY}
-    ${icl_core_LIBRARIES}
-    ${gpu_voxels_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${PCL_LIBRARIES}
-    ${CATKIN_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
-    ${roscpp_LIBRARIES}
-    ${rospy_LIBRARIES}
-    gpu_voxels_ros
-)
-
-add_executable (unsigned_test_node src/cow_and_lady_testing/unsigned_test_node.cpp)
-target_link_libraries (unsigned_test_node
-    ${Boost_SYSTEM_LIBRARY}
-    ${icl_core_LIBRARIES}
-    ${gpu_voxels_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    ${PCL_LIBRARIES}
-    ${CATKIN_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
-    ${roscpp_LIBRARIES}
-    ${rospy_LIBRARIES}
-    gpu_voxels_ros
-)
-
-
 
 install(TARGETS gpu_voxels_ros
 ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

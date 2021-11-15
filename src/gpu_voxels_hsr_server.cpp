@@ -171,6 +171,7 @@ namespace gpu_voxels_ros{
         }
 
         Vector3f camera_pos = Vector3f(sync_tf_.a14, sync_tf_.a24, sync_tf_.a34)/sync_tf_.a44;
+        cudaDeviceSynchronize();
 
         // std::cout << camera_pos << std::endl;
         update_transform_timer.Stop();
@@ -193,7 +194,8 @@ namespace gpu_voxels_ros{
         
         // transform new pointcloud to world coordinates
         my_point_cloud_.transformSelf(&sync_tf_);
-        
+        cudaDeviceSynchronize();
+
         transform_pc_timer.Stop();
 
         timing::Timer update_esdf_timer("UpdateESDF");
@@ -212,20 +214,21 @@ namespace gpu_voxels_ros{
         signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
 
         signedDistanceMap_->parallelBanding3DUnsigned();
-
+        cudaDeviceSynchronize();
         update_esdf_timer.Stop();
 
         timing::Timer transfer_timer("HostRetrieval");
         // maintainedProbVoxmap_->getVoxelUpdateTimesToHost(time_update_map_);
         
         pbaDistanceVoxmap_->getUnsignedDistancesToHost(sdf_map_);
-
+        cudaDeviceSynchronize();
 
         transfer_timer.Stop();
         sync_callback_timer.Stop();
         pointcloud_queue_.pop();
 
         
+        timing::Timer publish_timer("Publishing");
         // publishRVIZOccupancy(sdf_grad_map_);
         // publishRVIZGroundSDF(sdf_grad_map_);
 
@@ -247,11 +250,12 @@ namespace gpu_voxels_ros{
 
         publishRVIZGroundSDF(sdf_map_);
         publishRVIZOccupancy(sdf_map_);
+        publish_timer.Stop();
 
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        // timing::Timing::Print(std::cout);
+        timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);

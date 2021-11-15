@@ -32,7 +32,9 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
-#include <finean_msgs/HumanTrajectoryPrediction.h>
+
+#include <geometry_msgs/PoseArray.h>
+// #include <finean_msgs/HumanTrajectoryPrediction.h>
 #include <std_msgs/Float32MultiArray.h>
 
 #include <gpu_voxels_ros/utils.h>
@@ -55,7 +57,8 @@ namespace gpu_voxels_ros{
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-      void HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg);
+      // void HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg);
+      void HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
 
       double QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const;
       double GetTrilinearDistance(const Eigen::Vector3d &pos) const;
@@ -72,6 +75,7 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
+      void publish2DDistanceFieldImage(const std::vector<float> &distance_field_2d);
       void publish2DDistanceField(const std::vector<float> &distance_field_2d);
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
@@ -95,7 +99,7 @@ namespace gpu_voxels_ros{
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_, traj_pred_topic_;
       ros::Subscriber pcl_sub_, transform_sub_, traj_pred_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, distance_field_2d_pub_;
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, distance_field_2d_pub_, ground2dsdf_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
@@ -147,7 +151,8 @@ namespace gpu_voxels_ros{
 
       std::queue<std::tuple<ros::Time, Matrix4f>> cam_transform_queue_;
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
-      finean_msgs::HumanTrajectoryPrediction::ConstPtr human_traj_latest_;
+      // finean_msgs::HumanTrajectoryPrediction::ConstPtr human_traj_latest_;
+      geometry_msgs::PoseArray::ConstPtr human_traj_latest_;
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;

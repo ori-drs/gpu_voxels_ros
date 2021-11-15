@@ -11,6 +11,7 @@
 //----------------------------------------------------------------------
 #include <gpu_voxels_ros/live_composite_sdf.h>
 #include <gpu_voxels_ros/timing.h>
+// #include <gpu_voxels/helpers/GeometryGeneration.h>
 
 namespace gpu_voxels_ros{
 
@@ -39,7 +40,7 @@ namespace gpu_voxels_ros{
     node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 64);
 
-    num_sdfs_ = 20;
+    num_sdfs_ = 10;
 
     map_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_pointcloud", 1, true);
     ground_sdf_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_ground_sdf", 1, true);
@@ -49,6 +50,7 @@ namespace gpu_voxels_ros{
     traj_sweep_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_traj_steps", 1, true);
     distance_field_2d_pub_= node.advertise<std_msgs::Float32MultiArray>("distance_field_2d", 1, true);
     costmap_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_costmap", 1, true);
+    ground2dsdf_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("distancefield_2d_pcl", 1, true);
 
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &LiveCompositeSDF::PoseCallback, this);
@@ -199,48 +201,135 @@ namespace gpu_voxels_ros{
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
         
 
+        // std::vector<Vector3f>  box1, box2, box3, box4;
+        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+64 - 10 - 32, map_dimensions_.y/2 + 0 -10  - 32,0), Vector3f(map_dimensions_.x/2+64 + 10 - 32, map_dimensions_.y/2 + 0 + 10  - 32,0), 1.0);
+        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2-64 - 10 - 32, map_dimensions_.y/2 + 0 -10  - 32,0), Vector3f(map_dimensions_.x/2-64 + 10 - 32, map_dimensions_.y/2 + 0 + 10  - 32,0), 1.0);
+        // box3 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+0 - 10 - 32, map_dimensions_.y/2 + 64 -10  - 32,0), Vector3f(map_dimensions_.x/2+0 + 10 - 32, map_dimensions_.y/2 + 64 + 10  - 32,0), 1.0);
+        // box4 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+0 - 10 - 32, map_dimensions_.y/2 - 64 -10  - 32,0), Vector3f(map_dimensions_.x/2+0 + 10 - 32, map_dimensions_.y/2 - 64 + 10  - 32,0), 1.0);
+        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2) + 3.5 - 0.2, (map_dimensions_.y * voxel_side_length_/2) -0.2 , 0), 
+        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2) + 3.5 + 0.2, (map_dimensions_.y * voxel_side_length_/2) +0.2, 2.0), 0.05);
+        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)-3.5 - 0.2, (map_dimensions_.y * voxel_side_length_/2) -0.2 , 0), 
+        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2)-3.5 + 0.2, (map_dimensions_.y * voxel_side_length_/2) +0.2, 2.0), 0.05);
+        // box3 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)- 0.2, (map_dimensions_.y * voxel_side_length_/2) + 3.5 -0.2 , 0), 
+        //                                                           Vector3f( (map_dimensions_.x * voxel_side_length_/2) + 0.2, (map_dimensions_.y * voxel_side_length_/2) +3.5 + 0.2, 2.0), 0.05);
+        // box4 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)- 0.2, (map_dimensions_.y * voxel_side_length_/2) -3.5 -0.2 , 0), 
+        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2) + 0.2, (map_dimensions_.y * voxel_side_length_/2) -3.5 + 0.2, 2.0), 0.05);
+        
+
+        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(0, 0 , 0), 
+        //                                                           Vector3f(0.4, 0.4, 2.0), 
+        //                                                           0.05);
+        
+        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(3.0, 3.0 , 0), 
+        //                                                           Vector3f(3.4, 3.4, 2.0), 
+        //                                                           0.05);               
+
+
+        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(0,  0, 0), 
+        //                                                           Vector3f(12.8, 12.8, 0.4), 
+        //                                                           0.05);                                                                  
+
+        // maintainedProbVoxmap_->insertPointCloud(box1, eBVM_MAX_OCC_PROB); 
+        // maintainedProbVoxmap_->insertPointCloud(box2, eBVM_MAX_OCC_PROB); 
+        // maintainedProbVoxmap_->insertPointCloud(box3, eBVM_MAX_OCC_PROB); 
+        // maintainedProbVoxmap_->insertPointCloud(box4, eBVM_MAX_OCC_PROB); 
+
+
 
         // Get a 2D distance field for use in human trajectory prediction
+        timing::Timer dist_2d_compute_timer("DistanceField2DCompute");
         distvoxelmap_2d_->merge2DOccupied(maintainedProbVoxmap_, Vector3ui(0),  0.75, 2);
         distvoxelmap_2d_->parallelBanding3D(1, 1, 4, PBA_DEFAULT_M1_BLOCK_SIZE, PBA_DEFAULT_M2_BLOCK_SIZE, PBA_DEFAULT_M3_BLOCK_SIZE, 1);
         distvoxelmap_2d_->getUnsignedDistancesToHost(host_2d_dist_); 
+        cudaDeviceSynchronize();
+        dist_2d_compute_timer.Stop();
+        
+        // timing::Timer composite_timer("Compositing");
 
         // timing::Timer update_esdf_timer("UpdateESDF");
+        timing::Timer pba_timer("pba");
         signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
         signedDistanceMap_->parallelBanding3DUnsigned();
+        cudaDeviceSynchronize();
+        pba_timer.Stop();   
 
         // update_esdf_timer.Stop();
 
         // timing::Timer static_sdf_timer("StaticSDF");
-        
-        pbaDistanceVoxmap_->computeStaticSDF();
-
+      
         // static_sdf_timer.Stop();
 
         // timing::Timer composite_timer("Compositing");
 
-        // for (size_t i = 0; i < num_sdfs_; i++)
-        // {
-        //   pbaDistanceVoxmap_->compositeSDFReinit();
-        //   pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
-        //   pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[i]));
-        // }
-        // composite_timer.Stop();
+        // human_traj_latest_
+        // Get the first pose in the trajectory prediction (now)
+        
+        timing::Timer all_composite_sdf("all_composite");
+        pbaDistanceVoxmap_->computeStaticSDF();
 
-        pbaDistanceVoxmap_->compositeSDFReinit();
-        pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
-        pbaDistanceVoxmap_->getCompositeSDFToHost(sdf_map_);
+
+        if(human_traj_latest_){
+
+          size_t num_poses = human_traj_latest_->poses.size();
+          if (num_poses > 0)
+          {
+            size_t min_poses_sdfs = std::min(num_poses,  num_sdfs_);
+            for (size_t i = 0; i < min_poses_sdfs; i++)
+            {
+              float human_x = human_traj_latest_->poses[0].position.x;
+              float human_y = human_traj_latest_->poses[0].position.y;
+              int human_xi = round(human_x/voxel_side_length_);
+              int human_yi = round(human_y/voxel_side_length_);
+
+              cylinder_base_corner_ = Vector3ui(map_dimensions_.x/2+human_xi - 32 ,map_dimensions_.y/2 +human_yi -32 ,0);
+              std::cout << "Person position x: " << human_x << "\t y: " << human_y << std::endl;
+              pbaDistanceVoxmap_->compositeSDFReinit();
+              pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
+              pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[i]));
+            }
+
+            for (size_t i = min_poses_sdfs; i < num_sdfs_; i++){
+              *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[min_poses_sdfs - 1]);
+            }
+            sdf_map_ = *(composite_sdf_ptrs_[0]);
+          } // if num_poses > 0 
+          else{
+            pbaDistanceVoxmap_->compositeSDFReinit();
+            pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[0]));
+            for (size_t i = 1; i < num_sdfs_; i++)
+            {
+              *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[0]);
+            }
+            sdf_map_ = *(composite_sdf_ptrs_[0]);
+          }
+        }
+        else{
+          pbaDistanceVoxmap_->compositeSDFReinit();
+          pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[0]));
+          for (size_t i = 1; i < num_sdfs_; i++)
+          {
+            *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[0]);
+          }
+          sdf_map_ = *(composite_sdf_ptrs_[0]);
+        }
+
+        sdf_map_ = *(composite_sdf_ptrs_[0]);
 
         // transfer_timer.Stop();
+        cudaDeviceSynchronize();
+        all_composite_sdf.Stop();
         sync_callback_timer.Stop();
         pointcloud_queue_.pop();
 
+
+        timing::Timer publish_timer("publishing");
         publishRVIZGroundSDF(sdf_map_);
         publishRVIZOccupancy(sdf_map_);
         publish2DDistanceField(host_2d_dist_);
+        // publish2DDistanceFieldImage(host_2d_dist_);
+        publish_timer.Stop();
 
-
-        // timing::Timing::Print(std::cout);
+        timing::Timing::Print(std::cout);
 
     }
 
@@ -272,6 +361,45 @@ namespace gpu_voxels_ros{
     array.data = distance_field_2d;
     // array.layout = distance_field_2d;
     distance_field_2d_pub_.publish(array);
+  }
+
+  void LiveCompositeSDF::publish2DDistanceFieldImage(const std::vector<float> &distance_field_2d) {
+    pcl::PointXYZI pt;
+    pcl::PointCloud<pcl::PointXYZI> cloud;
+
+    for (size_t x = 0; x < map_dimensions_.x; ++x){
+      for (size_t y = 0; y < map_dimensions_.y; ++y){
+          size_t ind = y * map_dimensions_.x + x;
+
+          if (distance_field_2d[ind] <= 0.5)
+          {            
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = 0;
+            pt.intensity = distance_field_2d[ind];
+            cloud.push_back(pt);
+          }
+
+          if (distance_field_2d[ind] >0.5)
+          {            
+            pt.x = ((float) x - (0.5 * (float) map_dimensions_.x)) * voxel_side_length_;
+            pt.y = ((float)y - (0.5 * (float) map_dimensions_.y)) * voxel_side_length_;
+            pt.z = 0;
+            pt.intensity = 0.5;
+            cloud.push_back(pt);
+          }
+        }
+    }
+    
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "odom";
+    sensor_msgs::PointCloud2 cloud_msg;
+
+    pcl::toROSMsg(cloud, cloud_msg);
+    ground2dsdf_pub_.publish(cloud_msg);
+
   }
 
   void LiveCompositeSDF::publishRVIZVoxelFlags(const std::vector<bool> &flag_map) {
@@ -649,7 +777,8 @@ namespace gpu_voxels_ros{
     CallbackSync();
   }
 
-  void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
+  // void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
+  void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg)
   {
     human_traj_latest_ = msg;
   }
