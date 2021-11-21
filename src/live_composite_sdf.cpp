@@ -40,7 +40,7 @@ namespace gpu_voxels_ros{
     node_.param<int>("map_size_y", (int&) map_dimensions_.y, 256);
     node_.param<int>("map_size_z", (int&) map_dimensions_.z, 64);
 
-    num_sdfs_ = 10;
+    num_sdfs_ = 20;
 
     map_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_pointcloud", 1, true);
     ground_sdf_pub_ = node.advertise<pcl::PointCloud<pcl::PointXYZI> >("gpu_voxels_ground_sdf", 1, true);
@@ -55,7 +55,7 @@ namespace gpu_voxels_ros{
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &LiveCompositeSDF::PoseCallback, this);
     pcl_sub_ = node.subscribe(pcl_topic_, 10, &LiveCompositeSDF::PointcloudCallback, this);
-    traj_pred_sub_ = node.subscribe(traj_pred_topic_, 10, &LiveCompositeSDF::HumanTrajectoryPredictionCallback, this);
+    traj_pred_sub_ = node.subscribe(traj_pred_topic_, 1, &LiveCompositeSDF::HumanTrajectoryPredictionCallback, this);
 
     // Generate a GPU-Voxels instance:
     gvl_ = gpu_voxels::GpuVoxels::getInstance();
@@ -81,7 +81,6 @@ namespace gpu_voxels_ros{
     pbaInverseDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapInverse"));
     maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
-    signedDistanceMap_ = dynamic_pointer_cast<InheritSignedDistanceVoxelMap>(pbaDistanceVoxmap_);
 
     sdf_map_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
 
@@ -92,8 +91,10 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_->resetTimeSteps();
 
     // Generate the human sdf cylinder 
-    human_dims_ = Vector3ui(64,64,64);
-    cylinder_base_corner_ = Vector3ui(128-64/2+48,128-64/2,0);
+    human_dims_ = Vector3ui(64,64,map_dimensions_.z);
+    // cylinder_base_corner_ = Vector3ui(128-64/2+48,
+    //                                   128-64/2,
+    //                                   0);
     // Vector3f cylinder_center(64 * 0.5 * voxel_side_length_,
     //                         64 * 0.5 * voxel_side_length_, 
     //                         1.0);
@@ -105,11 +106,25 @@ namespace gpu_voxels_ros{
     //                           0)
  
     std::vector<Vector3f> cylinder_points = gpu_voxels::geometry_generation::createCylinderOfPoints(cylinder_center, 0.3f, 2.0f, voxel_side_length_);
+    std::vector<Vector3f> all_points = gpu_voxels::geometry_generation::createBoxOfPoints(Vector3f(0,0,0), 
+                                                                                          Vector3f(human_dims_.x * voxel_side_length_, 
+                                                                                                  human_dims_.y * voxel_side_length_ , 
+                                                                                                  human_dims_.x * voxel_side_length_), 
+                                                                                          voxel_side_length_);
 
     human_shared_ptr_ = boost::shared_ptr<DistanceVoxelMap>(new DistanceVoxelMap(human_dims_, voxel_side_length_, MT_DISTANCE_VOXELMAP));
+    // human_inverse_shared_ptr_ = boost::shared_ptr<DistanceVoxelMap>(new DistanceVoxelMap(human_dims_, voxel_side_length_, MT_DISTANCE_VOXELMAP));
+
+    // humanSignedDistanceMap_ = boost::shared_ptr<SignedDistanceVoxelMap>(new SignedDistanceVoxelMap(human_shared_ptr_, human_inverse_shared_ptr_, human_dims_, voxel_side_length_));
+    
+    signedDistanceMap_ = dynamic_pointer_cast<InheritSignedDistanceVoxelMap>(pbaDistanceVoxmap_);
 
     human_shared_ptr_->insertPointCloud(cylinder_points, eBVM_OCCUPIED);
+    // human_inverse_shared_ptr_->insertPointCloud(all_points, eBVM_OCCUPIED);
+    // human_inverse_shared_ptr_->insertPointCloud(cylinder_points, eBVM_FREE);
+
     human_shared_ptr_->parallelBanding3D();
+    // humanSignedDistanceMap_->parallelBanding3D();
 
     // Create vector of sdfs (for composite)
     std::cout << "Instantiating " << num_sdfs_ << " composite sdfs..." << std::endl;
@@ -122,6 +137,7 @@ namespace gpu_voxels_ros{
     }
 
     pbaDistanceVoxmap_->addHuman(human_shared_ptr_, human_dims_);
+    // pbaDistanceVoxmap_->addSignedHuman(humanSignedDistanceMap_, human_dims_);
 
     std::cout << "HSR Server Ready" << std::endl;
   }
@@ -196,7 +212,7 @@ namespace gpu_voxels_ros{
 
         pbaDistanceVoxmap_->clearMap();
         distvoxelmap_2d_->clearMap();
-
+      
         maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
         
@@ -237,9 +253,11 @@ namespace gpu_voxels_ros{
 
 
         // Get a 2D distance field for use in human trajectory prediction
+
         timing::Timer dist_2d_compute_timer("DistanceField2DCompute");
         distvoxelmap_2d_->merge2DOccupied(maintainedProbVoxmap_, Vector3ui(0),  0.75, 2);
         distvoxelmap_2d_->parallelBanding3D(1, 1, 4, PBA_DEFAULT_M1_BLOCK_SIZE, PBA_DEFAULT_M2_BLOCK_SIZE, PBA_DEFAULT_M3_BLOCK_SIZE, 1);
+        // std::cout << "distvoxelmap_2d_->getUnsignedDistancesToHost" << std::endl;
         distvoxelmap_2d_->getUnsignedDistancesToHost(host_2d_dist_); 
         cudaDeviceSynchronize();
         dist_2d_compute_timer.Stop();
@@ -263,39 +281,79 @@ namespace gpu_voxels_ros{
 
         // human_traj_latest_
         // Get the first pose in the trajectory prediction (now)
-        
+
         timing::Timer all_composite_sdf("all_composite");
         pbaDistanceVoxmap_->computeStaticSDF();
+        cudaDeviceSynchronize();
 
 
         if(human_traj_latest_){
 
+          // float time_diff  = (ros::Time::now() - human_traj_latest_->header.stamp).toSec();
+          // std::cout << "Msg time diff: " << time_diff << " (s) "<< std::endl;
+
           size_t num_poses = human_traj_latest_->poses.size();
+
+          // std::cout << "human_traj_latest_: " << num_poses << std::endl;
           if (num_poses > 0)
           {
             size_t min_poses_sdfs = std::min(num_poses,  num_sdfs_);
             for (size_t i = 0; i < min_poses_sdfs; i++)
             {
-              float human_x = human_traj_latest_->poses[0].position.x;
-              float human_y = human_traj_latest_->poses[0].position.y;
+              // std::cout << "composite_sdf_ptrs_: " << i << std::endl;
+              float human_x = human_traj_latest_->poses[i].position.x;
+              float human_y = human_traj_latest_->poses[i].position.y;
               int human_xi = round(human_x/voxel_side_length_);
               int human_yi = round(human_y/voxel_side_length_);
 
               cylinder_base_corner_ = Vector3ui(map_dimensions_.x/2+human_xi - 32 ,map_dimensions_.y/2 +human_yi -32 ,0);
-              std::cout << "Person position x: " << human_x << "\t y: " << human_y << std::endl;
+              // std::cout << "Person position x: " << human_x << "\t y: " << human_y << std::endl;
               pbaDistanceVoxmap_->compositeSDFReinit();
               pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
+              cudaDeviceSynchronize();
               pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[i]));
+              cudaDeviceSynchronize();
             }
 
-            for (size_t i = min_poses_sdfs; i < num_sdfs_; i++){
-              *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[min_poses_sdfs - 1]);
+            if (num_sdfs_ > min_poses_sdfs)
+            {
+              for (size_t i = min_poses_sdfs; i < num_sdfs_; i++){
+                // std::cout << "composite_sdf_ptrs_: " << i << std::endl;
+                *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[min_poses_sdfs - 1]);
+              }
             }
-            sdf_map_ = *(composite_sdf_ptrs_[0]);
+
+
+            // For visuals
+            // std::cout << "visual sdf" << std::endl;
+
+            pbaDistanceVoxmap_->compositeSDFReinit();
+            for (size_t i = 0; i < min_poses_sdfs; i++)
+            {
+              // std::cout << "composite_sdf_ptrs_: " << i << std::endl;
+              float human_x = human_traj_latest_->poses[i].position.x;
+              float human_y = human_traj_latest_->poses[i].position.y;
+              int human_xi = round(human_x/voxel_side_length_);
+              int human_yi = round(human_y/voxel_side_length_);
+
+              cylinder_base_corner_ = Vector3ui(map_dimensions_.x/2+human_xi - 32 ,map_dimensions_.y/2 +human_yi -32 ,0);
+              // std::cout << "get composite" << std::endl;
+              pbaDistanceVoxmap_->getCompositeSDF(human_shared_ptr_->getVoxelMapSize(), human_dims_, cylinder_base_corner_);
+              cudaDeviceSynchronize();
+
+            }
+            // std::cout << "sdf_map_" << std::endl;
+            pbaDistanceVoxmap_->getCompositeSDFToHost(sdf_map_);
+            cudaDeviceSynchronize();
+            // std::cout << "sdf_map_finished" << std::endl;
+
+            // sdf_map_ = *(composite_sdf_ptrs_[0]);
           } // if num_poses > 0 
           else{
+            // std::cout << "else 1" << std::endl;
             pbaDistanceVoxmap_->compositeSDFReinit();
             pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[0]));
+            cudaDeviceSynchronize();
             for (size_t i = 1; i < num_sdfs_; i++)
             {
               *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[0]);
@@ -304,8 +362,10 @@ namespace gpu_voxels_ros{
           }
         }
         else{
+          // std::cout << "else 2" << std::endl;
           pbaDistanceVoxmap_->compositeSDFReinit();
           pbaDistanceVoxmap_->getCompositeSDFToHost(*(composite_sdf_ptrs_[0]));
+          cudaDeviceSynchronize();
           for (size_t i = 1; i < num_sdfs_; i++)
           {
             *(composite_sdf_ptrs_[i]) = *(composite_sdf_ptrs_[0]);
@@ -313,7 +373,8 @@ namespace gpu_voxels_ros{
           sdf_map_ = *(composite_sdf_ptrs_[0]);
         }
 
-        sdf_map_ = *(composite_sdf_ptrs_[0]);
+        // sdf_map_ = *(composite_sdf_ptrs_[0]);
+        // std::cout << "callback final" << std::endl;
 
         // transfer_timer.Stop();
         cudaDeviceSynchronize();
@@ -329,7 +390,7 @@ namespace gpu_voxels_ros{
         // publish2DDistanceFieldImage(host_2d_dist_);
         publish_timer.Stop();
 
-        timing::Timing::Print(std::cout);
+        // timing::Timing::Print(std::cout);
 
     }
 
@@ -798,8 +859,8 @@ namespace gpu_voxels_ros{
         (float) query_pos.z < 0.0 || (float) query_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
     
 
-      std::cout << "Query out of bounds"<< std::endl;
-      std::cout << "\t query_pos: \t " << "x:" << query_pos.x << "\t " << "y:" << query_pos.y << "\t "<< "z:" << query_pos.z << "\t "<< std::endl;
+      // std::cout << "Query out of bounds"<< std::endl;
+      // std::cout << "\t query_pos: \t " << "x:" << query_pos.x << "\t " << "y:" << query_pos.y << "\t "<< "z:" << query_pos.z << "\t "<< std::endl;
     
       grad[0] = 0;
       grad[1] = 0;
@@ -949,8 +1010,8 @@ namespace gpu_voxels_ros{
         (float) map_pos.z < 0.0 || (float) map_pos.z >= (float) map_dimensions_.z * voxel_side_length_){
     
 
-      std::cout << "Query out of bounds"<< std::endl;
-      std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
+      // std::cout << "Query out of bounds"<< std::endl;
+      // std::cout << "\t map_pos: \t " << "x:" << map_pos.x << "\t " << "y:" << map_pos.y << "\t "<< "z:" << map_pos.z << "\t "<< std::endl;
     
       grad[0] = 0;
       grad[1] = 0;
@@ -1035,7 +1096,7 @@ namespace gpu_voxels_ros{
   }
 
   double LiveCompositeSDF::QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const{
-
+    // std::cout << "QueryDistance" << std::endl;
     uint lin_ind = gpu_voxels::voxelmap::getVoxelIndexUnsigned(map_dimensions_, gpu_voxels::Vector3ui(xi, yi, zi));
     // return sdf_grad_map_[lin_ind].sdf;
     return sdf_map_[lin_ind];

@@ -104,6 +104,7 @@ namespace gpu_voxels_ros{
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
       boost::shared_ptr<InheritSignedDistanceVoxelMap> signedDistanceMap_;
+      boost::shared_ptr<SignedDistanceVoxelMap> humanSignedDistanceMap_;
       boost::shared_ptr<DistanceVoxelMap> distvoxelmap_2d_;
 
       // boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_, robotVoxmap_, cleanVoxmap_;
@@ -114,7 +115,7 @@ namespace gpu_voxels_ros{
 
       Vector3ui human_dims_;
       Vector3ui cylinder_base_corner_;
-      boost::shared_ptr<DistanceVoxelMap> human_shared_ptr_;
+      boost::shared_ptr<DistanceVoxelMap> human_shared_ptr_, human_inverse_shared_ptr_;
       std::vector<std::shared_ptr<std::vector<float>>> composite_sdf_ptrs_;
       std::vector<std::shared_ptr<std::vector<gpu_voxels::VectorSdfGrad>>> composite_sdf_grad_ptrs_;
       size_t num_sdfs_;
