@@ -255,7 +255,7 @@ namespace gpu_voxels_ros{
 
         // publishRVIZOccupancy(occupancy_map_);
         // std::cout << "Finished publishing" << std::endl;
-        timing::Timing::Print(std::cout);
+        // timing::Timing::Print(std::cout);
 
     }
     // publishRVIZGroundSDFGrad(sdf_grad_map_);
