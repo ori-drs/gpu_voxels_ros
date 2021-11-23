@@ -149,7 +149,7 @@ namespace gpu_voxels_ros{
     timing::Timer sync_callback_timer("CallbackSync");
 
     ros::Time pcl_time;
-    double time_delay = 2e-3;
+    double time_delay = 2e-2;
     timing::Timer time_increment_timer("time_increment_timer");
     maintainedProbVoxmap_->incrementTimeSteps();
     time_increment_timer.Stop();
