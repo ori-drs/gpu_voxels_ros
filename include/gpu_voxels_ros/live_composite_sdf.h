@@ -156,6 +156,7 @@ namespace gpu_voxels_ros{
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
       // finean_msgs::HumanTrajectoryPrediction::ConstPtr human_traj_latest_;
       geometry_msgs::PoseArray::ConstPtr human_traj_latest_;
+      std::mutex traj_msg_mutex_;
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;

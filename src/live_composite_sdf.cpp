@@ -288,6 +288,7 @@ namespace gpu_voxels_ros{
 
 
         if(human_traj_latest_){
+          std::lock_guard<std::mutex> lock(traj_msg_mutex_);
 
           // float time_diff  = (ros::Time::now() - human_traj_latest_->header.stamp).toSec();
           // std::cout << "Msg time diff: " << time_diff << " (s) "<< std::endl;
