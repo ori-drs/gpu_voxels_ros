@@ -39,6 +39,8 @@
 
 #include <gpu_voxels_ros/utils.h>
 
+#include <mutex> 
+
 using boost::dynamic_pointer_cast;
 
 using gpu_voxels::voxelmap::ProbVoxelMap;
