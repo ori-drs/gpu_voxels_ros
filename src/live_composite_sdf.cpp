@@ -54,7 +54,7 @@ namespace gpu_voxels_ros{
 
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &LiveCompositeSDF::PoseCallback, this);
-    pcl_sub_ = node.subscribe(pcl_topic_, 10, &LiveCompositeSDF::PointcloudCallback, this);
+    pcl_sub_ = node.subscribe(pcl_topic_, 1, &LiveCompositeSDF::PointcloudCallback, this);
     traj_pred_sub_ = node.subscribe(traj_pred_topic_, 1, &LiveCompositeSDF::HumanTrajectoryPredictionCallback, this);
 
     // Generate a GPU-Voxels instance:
