@@ -78,8 +78,7 @@ namespace gpu_voxels_ros{
 
 
     transform_sub_ = node.subscribe(transform_topic_, 10, &GPUVoxelsHSRServer::PoseCallback, this);
-    pcl_sub_ = node.subscribe(pcl_topic_, 10, &GPUVoxelsHSRServer::PointcloudCallback, this);
-    // traj_pred_sub_ = node.subscribe(traj_pred_topic_, 10, &GPUVoxelsHSRServer::HumanTrajectoryPredictionCallback, this);
+    pcl_sub_ = node.subscribe(pcl_topic_, 1, &GPUVoxelsHSRServer::PointcloudCallback, this);
 
 
     // Generate a GPU-Voxels instance:
@@ -107,10 +106,9 @@ namespace gpu_voxels_ros{
     maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
     signedDistanceMap_ = dynamic_pointer_cast<InheritSignedDistanceVoxelMap>(pbaDistanceVoxmap_);
-    // cleanVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmap"));
+    cleanVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmap"));
     // cleanVoxmapVisual_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmapVisual"));
 
-    // sdf_grad_map_ = std::vector<gpu_voxels::VectorSdfGrad>(pbaDistanceVoxmap_->getVoxelMapSize());
     sdf_map_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
     // time_update_map_ = std::vector<uint>(maintainedProbVoxmap_->getVoxelMapSize());
     
@@ -135,7 +133,7 @@ namespace gpu_voxels_ros{
     timing::Timer sync_callback_timer("CallbackSync");
 
     ros::Time pcl_time;
-    double time_delay = 2e-3;
+    double time_delay = 2e-2;
     timing::Timer time_increment_timer("time_increment_timer");
     maintainedProbVoxmap_->incrementTimeSteps();
     time_increment_timer.Stop();
@@ -194,7 +192,6 @@ namespace gpu_voxels_ros{
         
         // transform new pointcloud to world coordinates
         my_point_cloud_.transformSelf(&sync_tf_);
-        cudaDeviceSynchronize();
 
         transform_pc_timer.Stop();
 
@@ -206,12 +203,11 @@ namespace gpu_voxels_ros{
         maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
 
-        
-        // maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 2); //erode only "lonely voxels" without occupied neighbors
-        // maintainedProbVoxmap_->erodeLonelyInto(*cleanVoxmap_); //erode only "lonely voxels" without occupied neighbors
-
+        cleanVoxmap_->clearMap();
+        maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 0.08, 0.75); // 0.08 requires at least 2 surroundings
+  
         // signedDistanceMap_->occupancyMerge(cleanVoxmap_, 0.75, 0.74999);
-        signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
+        signedDistanceMap_->occupancyMerge(cleanVoxmap_, 0.75, 0.74999);
 
         signedDistanceMap_->parallelBanding3DUnsigned();
         cudaDeviceSynchronize();
@@ -794,8 +790,9 @@ namespace gpu_voxels_ros{
     CallbackSync();
   }
 
-  void GPUVoxelsHSRServer::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
+  void GPUVoxelsHSRServer::HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg)
   {
+    std::lock_guard<std::mutex> lock(traj_msg_mutex_);
     human_traj_latest_ = msg;
   }
 

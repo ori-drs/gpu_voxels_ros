@@ -81,6 +81,7 @@ namespace gpu_voxels_ros{
     pbaInverseDistanceVoxmap_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapInverse"));
     maintainedProbVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("maintainedProbVoxmap"));
     pbaDistanceVoxmapVisual_ = dynamic_pointer_cast<DistanceVoxelMap>(gvl_->getMap("pbaDistanceVoxmapVisual"));
+    cleanVoxmap_ = dynamic_pointer_cast<ProbVoxelMap>(gvl_->getMap("cleanVoxmap"));
 
     sdf_map_ = std::vector<float>(pbaDistanceVoxmap_->getVoxelMapSize());
 
@@ -92,18 +93,10 @@ namespace gpu_voxels_ros{
 
     // Generate the human sdf cylinder 
     human_dims_ = Vector3ui(64,64,map_dimensions_.z);
-    // cylinder_base_corner_ = Vector3ui(128-64/2+48,
-    //                                   128-64/2,
-    //                                   0);
-    // Vector3f cylinder_center(64 * 0.5 * voxel_side_length_,
-    //                         64 * 0.5 * voxel_side_length_, 
-    //                         1.0);
     Vector3f cylinder_center(64 * 0.5 * voxel_side_length_,
                             64 * 0.5 * voxel_side_length_, 
                             1.0);
-    // cylinder_base_corner_ =  (x_person  - 64 * 0.5 * voxel_side_length_,
-    //                           y_person  - 64 * 0.5 * voxel_side_length_,
-    //                           0)
+
  
     std::vector<Vector3f> cylinder_points = gpu_voxels::geometry_generation::createCylinderOfPoints(cylinder_center, 0.3f, 2.0f, voxel_side_length_);
     std::vector<Vector3f> all_points = gpu_voxels::geometry_generation::createBoxOfPoints(Vector3f(0,0,0), 
@@ -212,50 +205,28 @@ namespace gpu_voxels_ros{
 
         pbaDistanceVoxmap_->clearMap();
         distvoxelmap_2d_->clearMap();
-      
+        // cleanVoxmap_->clearMap();
+
+        timing::Timer pcl_timer("PCL insertion");
         maintainedProbVoxmap_->insertClippedSensorData<BIT_VECTOR_LENGTH>(my_point_cloud_, camera_pos, true, false, eBVM_OCCUPIED, 
                                                                           min_ray_length_, max_ray_length_, NULL, remove_floor_);
-        
-
-        // std::vector<Vector3f>  box1, box2, box3, box4;
-        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+64 - 10 - 32, map_dimensions_.y/2 + 0 -10  - 32,0), Vector3f(map_dimensions_.x/2+64 + 10 - 32, map_dimensions_.y/2 + 0 + 10  - 32,0), 1.0);
-        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2-64 - 10 - 32, map_dimensions_.y/2 + 0 -10  - 32,0), Vector3f(map_dimensions_.x/2-64 + 10 - 32, map_dimensions_.y/2 + 0 + 10  - 32,0), 1.0);
-        // box3 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+0 - 10 - 32, map_dimensions_.y/2 + 64 -10  - 32,0), Vector3f(map_dimensions_.x/2+0 + 10 - 32, map_dimensions_.y/2 + 64 + 10  - 32,0), 1.0);
-        // box4 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(map_dimensions_.x/2+0 - 10 - 32, map_dimensions_.y/2 - 64 -10  - 32,0), Vector3f(map_dimensions_.x/2+0 + 10 - 32, map_dimensions_.y/2 - 64 + 10  - 32,0), 1.0);
-        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2) + 3.5 - 0.2, (map_dimensions_.y * voxel_side_length_/2) -0.2 , 0), 
-        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2) + 3.5 + 0.2, (map_dimensions_.y * voxel_side_length_/2) +0.2, 2.0), 0.05);
-        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)-3.5 - 0.2, (map_dimensions_.y * voxel_side_length_/2) -0.2 , 0), 
-        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2)-3.5 + 0.2, (map_dimensions_.y * voxel_side_length_/2) +0.2, 2.0), 0.05);
-        // box3 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)- 0.2, (map_dimensions_.y * voxel_side_length_/2) + 3.5 -0.2 , 0), 
-        //                                                           Vector3f( (map_dimensions_.x * voxel_side_length_/2) + 0.2, (map_dimensions_.y * voxel_side_length_/2) +3.5 + 0.2, 2.0), 0.05);
-        // box4 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f((map_dimensions_.x * voxel_side_length_/2)- 0.2, (map_dimensions_.y * voxel_side_length_/2) -3.5 -0.2 , 0), 
-        //                                                           Vector3f((map_dimensions_.x * voxel_side_length_/2) + 0.2, (map_dimensions_.y * voxel_side_length_/2) -3.5 + 0.2, 2.0), 0.05);
-        
-
-        // box1 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(0, 0 , 0), 
-        //                                                           Vector3f(0.4, 0.4, 2.0), 
-        //                                                           0.05);
-        
-        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(3.0, 3.0 , 0), 
-        //                                                           Vector3f(3.4, 3.4, 2.0), 
-        //                                                           0.05);               
-
-
-        // box2 = gpu_voxels::geometry_generation::createBoxOfPoints( Vector3f(0,  0, 0), 
-        //                                                           Vector3f(12.8, 12.8, 0.4), 
-        //                                                           0.05);                                                                  
-
-        // maintainedProbVoxmap_->insertPointCloud(box1, eBVM_MAX_OCC_PROB); 
-        // maintainedProbVoxmap_->insertPointCloud(box2, eBVM_MAX_OCC_PROB); 
-        // maintainedProbVoxmap_->insertPointCloud(box3, eBVM_MAX_OCC_PROB); 
-        // maintainedProbVoxmap_->insertPointCloud(box4, eBVM_MAX_OCC_PROB); 
-
-
-
+                                                                    
+        pcl_timer.Stop();
         // Get a 2D distance field for use in human trajectory prediction
 
+        // maintainedProbVoxmap_->erodeLonelyInto(*cleanVoxmap_); //erode only "lonely voxels" without occupied neighbors
+        timing::Timer erosion_timer("Erosion");
+        cleanVoxmap_->clearMap();
+        maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 0.08, 0.75); // 0.08 requires at least 2 surroundings
+        erosion_timer.Stop();
+
+
+
+        // signedDistanceMap_->occupancyMerge(cleanVoxmap_, 0.75, 0.74999);
+        
         timing::Timer dist_2d_compute_timer("DistanceField2DCompute");
-        distvoxelmap_2d_->merge2DOccupied(maintainedProbVoxmap_, Vector3ui(0),  0.75, 2);
+        // distvoxelmap_2d_->merge2DOccupied(maintainedProbVoxmap_, Vector3ui(0),  0.75, 2);
+        distvoxelmap_2d_->merge2DOccupied(cleanVoxmap_, Vector3ui(0),  0.75, 2);
         distvoxelmap_2d_->parallelBanding3D(1, 1, 4, PBA_DEFAULT_M1_BLOCK_SIZE, PBA_DEFAULT_M2_BLOCK_SIZE, PBA_DEFAULT_M3_BLOCK_SIZE, 1);
         // std::cout << "distvoxelmap_2d_->getUnsignedDistancesToHost" << std::endl;
         distvoxelmap_2d_->getUnsignedDistancesToHost(host_2d_dist_); 
@@ -264,14 +235,15 @@ namespace gpu_voxels_ros{
         
         // timing::Timer composite_timer("Compositing");
 
-        // timing::Timer update_esdf_timer("UpdateESDF");
+        timing::Timer update_esdf_timer("UpdateESDF");
         timing::Timer pba_timer("pba");
-        signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
+        // signedDistanceMap_->occupancyMerge(maintainedProbVoxmap_, 0.75, 0.74999);
+        signedDistanceMap_->occupancyMerge(cleanVoxmap_, 0.75, 0.74999);
         signedDistanceMap_->parallelBanding3DUnsigned();
         // cudaDeviceSynchronize();
         pba_timer.Stop();   
 
-        // update_esdf_timer.Stop();
+        update_esdf_timer.Stop();
 
         // timing::Timer static_sdf_timer("StaticSDF");
       
@@ -836,7 +808,6 @@ namespace gpu_voxels_ros{
     CallbackSync();
   }
 
-  // void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
   void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg)
   {
     std::lock_guard<std::mutex> lock(traj_msg_mutex_);

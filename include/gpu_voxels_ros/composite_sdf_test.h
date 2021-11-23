@@ -32,7 +32,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
-#include <finean_msgs/HumanTrajectoryPrediction.h>
+#include <geometry_msgs/PoseArray.h>
 
 #include <gpu_voxels_ros/utils.h>
 
@@ -55,7 +55,7 @@ namespace gpu_voxels_ros{
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-      void HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg);
+      void HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
 
       double QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const;
       double GetTrilinearDistance(const Eigen::Vector3d &pos) const;

@@ -16,9 +16,8 @@ FIND_PACKAGE(rospy REQUIRED)
 FIND_PACKAGE(Eigen3 REQUIRED)
 set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 find_package(ompl REQUIRED)
-# find_package(finean_msgs REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs finean_msgs)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs geometry_msgs)
 
 
 # Must be called before adding libraries
@@ -47,7 +46,6 @@ target_link_libraries(gpu_voxels_ros
     ${roscpp_LIBRARIES}
     ${rospy_LIBRARIES}
     ${OMPL_LIBRARIES}
-    ${finean_msgs_LIBRARIES}
     )
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -64,7 +62,6 @@ include_directories(
     ${rospy_INCLUDE_DIRS}
     ${Eigen3_INCLUDE_DIRS}
     ${OMPL_INCLUDE_DIRS}
-    ${finean_msgs_INCLUDE_DIRS}
     )
 
 

@@ -34,7 +34,6 @@
 
 
 #include <geometry_msgs/PoseArray.h>
-// #include <finean_msgs/HumanTrajectoryPrediction.h>
 #include <std_msgs/Float32MultiArray.h>
 
 #include <gpu_voxels_ros/utils.h>
@@ -59,7 +58,7 @@ namespace gpu_voxels_ros{
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-      // void HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg);
+
       void HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
 
       double QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const;
@@ -154,7 +153,6 @@ namespace gpu_voxels_ros{
 
       std::queue<std::tuple<ros::Time, Matrix4f>> cam_transform_queue_;
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
-      // finean_msgs::HumanTrajectoryPrediction::ConstPtr human_traj_latest_;
       geometry_msgs::PoseArray::ConstPtr human_traj_latest_;
       std::mutex traj_msg_mutex_;
 
