@@ -839,6 +839,7 @@ namespace gpu_voxels_ros{
   // void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const finean_msgs::HumanTrajectoryPrediction::ConstPtr& msg)
   void LiveCompositeSDF::HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg)
   {
+    std::lock_guard<std::mutex> lock(traj_msg_mutex_);
     human_traj_latest_ = msg;
   }
 
