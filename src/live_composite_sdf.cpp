@@ -217,7 +217,7 @@ namespace gpu_voxels_ros{
         // maintainedProbVoxmap_->erodeLonelyInto(*cleanVoxmap_); //erode only "lonely voxels" without occupied neighbors
         timing::Timer erosion_timer("Erosion");
         cleanVoxmap_->clearMap();
-        maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 0.08, 0.75); // 0.08 requires at least 2 surroundings
+        maintainedProbVoxmap_->erodeInto(*cleanVoxmap_, 0.35, 0.75); // 0.08 requires at least 2 surroundings
         erosion_timer.Stop();
 
 
