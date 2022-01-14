@@ -19,6 +19,7 @@
 // LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 // -- END LICENSE BLOCK ------------------------------------------------
+
 //----------------------------------------------------------------------
 /*!\file
  *
@@ -49,12 +50,9 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
-#include <gpu_voxels_ros/RecoveryPlanner.h>
-#include <gpu_voxels_ros/utils.h>
-
 #include <geometry_msgs/PoseArray.h>
 
-#include <mutex> 
+#include <gpu_voxels_ros/utils.h>
 
 
 using boost::dynamic_pointer_cast;
@@ -67,11 +65,11 @@ using gpu_voxels::voxelmap::InheritSignedDistanceVoxelMap;
 
 namespace gpu_voxels_ros{
 
-  class GPUVoxelsHSRServer {
+  class SDFCompositer {
 
     public:
-      GPUVoxelsHSRServer(ros::NodeHandle& node);
-      ~GPUVoxelsHSRServer();
+      SDFCompositer(ros::NodeHandle& node);
+      ~SDFCompositer();
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
@@ -87,8 +85,6 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
-      void get2DCollisionMap(const std::vector<float> & sdf_map, std::vector<bool> & occ_map_2d, const float safety_margin, const float height_cutoff);
-      void getRecoveryPlan(const float safety_margin, const float height_cutoff, const float start_x, const float start_y, const float goal_x, const float goal_y, const uint interp_num);
 
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
@@ -98,8 +94,6 @@ namespace gpu_voxels_ros{
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZCostmap(const std::vector<float> &costmap);
-      void publishRVIZConeRankings();
-      void publishRVIZGroundOccupancy(const std::vector<bool> &occupancy_2d_map);
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
@@ -113,10 +107,8 @@ namespace gpu_voxels_ros{
     private:
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_, traj_pred_topic_;
-      ros::Subscriber pcl_sub_, transform_sub_, traj_pred_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, cone_arrow_pub_, ground_occ_pub_;
-
-      RecoveryPlanner recovery_planner_;
+      ros::Subscriber pcl_sub_, transform_sub_;  
+      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
@@ -150,10 +142,6 @@ namespace gpu_voxels_ros{
       float dalpha_ = 1.1*M_PI_4;
       float dtheta_ = 1.3*M_PI_4;
 
-      std::vector<float> pan_deltas_ = {-3.14, -2.0, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.14};
-      std::vector<float> tilt_deltas_ = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
-      std::vector<float> cone_costs_ = std::vector<float>(144);
-      robot::JointValueMap next_cone_robot_joints_;
 
       float max_ray_length_ = 7; // Testing whether this helps clearing
 
@@ -164,8 +152,6 @@ namespace gpu_voxels_ros{
 
       std::queue<std::tuple<ros::Time, Matrix4f>> cam_transform_queue_;
       std::queue<sensor_msgs::PointCloud2::ConstPtr> pointcloud_queue_;
-      geometry_msgs::PoseArray::ConstPtr human_traj_latest_;
-      std::mutex traj_msg_mutex_;
 
       std::vector<gpu_voxels::VectorSdfGrad> sdf_grad_map_;
       std::vector<float> sdf_map_;

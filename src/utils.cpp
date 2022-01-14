@@ -26,34 +26,12 @@
  * \date    2020-09-24 
  */
 //----------------------------------------------------------------------
+#include <gpu_voxels_ros/utils.h>
 
-#include <ros/ros.h>
-#include <gpu_voxels_ros/gpu_voxels_hsr_server.h>
-
-int main(int argc, char** argv) {
-  ros::init(argc, argv, "gpu_voxels");
-  ros::NodeHandle nh;
-  ros::NodeHandle nh_private("~");
-
-  gpu_voxels_ros::GPUVoxelsHSRServer* gpu_voxels_ptr; 
-  gpu_voxels_ptr = new gpu_voxels_ros::GPUVoxelsHSRServer(nh);
-
-  auto begin = std::chrono::system_clock::now();
-  auto end = std::chrono::system_clock::now();
-  std::chrono::duration<double> elapsed;
-
-  while(true)
-  {
-    ros::spinOnce();
-  
-    end = std::chrono::system_clock::now();
-    
-    elapsed = end - begin;
-
-    if(elapsed.count() - 60 >= 0){
-      break;
-    }
-
-  }
-  return 0;
+// Constrain angles between -pi and pi
+float gpu_voxels_ros::constrainAngle(float x){
+    x = fmod(x + M_PI, 2*M_PI);
+    if (x < 0)
+        x += 2*M_PI;
+    return x - M_PI;
 }

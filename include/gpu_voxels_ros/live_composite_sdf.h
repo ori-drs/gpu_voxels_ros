@@ -27,8 +27,8 @@
  */
 //----------------------------------------------------------------------
 
-#ifndef GPU_VOXELS_ROS_HSR_SERVER_H
-#define GPU_VOXELS_ROS_HSR_SERVER_H
+#ifndef GPU_VOXELS_ROS_LIVE_COMPOSITE_SDF_H
+#define GPU_VOXELS_ROS_LIVE_COMPOSITE_SDF_H
 
 #include <cstdlib>
 #include <signal.h>
@@ -49,13 +49,13 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
-#include <gpu_voxels_ros/RecoveryPlanner.h>
-#include <gpu_voxels_ros/utils.h>
 
 #include <geometry_msgs/PoseArray.h>
+#include <std_msgs/Float32MultiArray.h>
+
+#include <gpu_voxels_ros/utils.h>
 
 #include <mutex> 
-
 
 using boost::dynamic_pointer_cast;
 
@@ -67,19 +67,25 @@ using gpu_voxels::voxelmap::InheritSignedDistanceVoxelMap;
 
 namespace gpu_voxels_ros{
 
-  class GPUVoxelsHSRServer {
+  class LiveCompositeSDF {
 
     public:
-      GPUVoxelsHSRServer(ros::NodeHandle& node);
-      ~GPUVoxelsHSRServer();
+      LiveCompositeSDF(ros::NodeHandle& node);
+      ~LiveCompositeSDF();
 
       void PoseCallback(const geometry_msgs::TransformStampedConstPtr &msg);
       void PointcloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
+
       void HumanTrajectoryPredictionCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
 
       double QueryDistance(uint32_t xi, uint32_t yi, uint32_t zi) const;
       double GetTrilinearDistance(const Eigen::Vector3d &pos) const;
       double GetTrilinearDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const;
+
+      double QueryDistanceIndexed(uint32_t xi, uint32_t yi, uint32_t zi, size_t t_index) const;
+      double GetDistanceAndGradientIndexed(const Eigen::Vector3d &pos, Eigen::Vector3d &grad, size_t t_index) const;
+      double GetTrilinearDistanceAndGradientIndexed(const Eigen::Vector3d &pos, Eigen::Vector3d &grad, size_t t_index) const;
+      double GetTrilinearDistanceIndexed(const Eigen::Vector3d &pos, size_t t_index) const;
 
       double GetDistanceAndGradient(const Eigen::Vector3d &pos, Eigen::Vector3d &grad) const;
       double GetDistance(const Eigen::Vector3d &pos) const;
@@ -87,19 +93,17 @@ namespace gpu_voxels_ros{
       void SaveSDFToFile(const std::string filepath);
       void SaveOccupancyToFile(const std::string filepath);
 
-      void get2DCollisionMap(const std::vector<float> & sdf_map, std::vector<bool> & occ_map_2d, const float safety_margin, const float height_cutoff);
-      void getRecoveryPlan(const float safety_margin, const float height_cutoff, const float start_x, const float start_y, const float goal_x, const float goal_y, const uint interp_num);
-
+      void publish2DDistanceFieldImage(const std::vector<float> &distance_field_2d);
+      void publish2DDistanceField(const std::vector<float> &distance_field_2d);
       void publishRVIZOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZOccupancy(const std::vector<float> &sdf_map);
+      void publishRVIZUncleanOccupancy(const std::vector<float> &sdf_map);
       void publishRVIZOccupancy(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZGroundSDF(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZGroundSDF(const std::vector<float> &sdf_map);
       void publishRVIZGroundSDFGrad(const std::vector<gpu_voxels::VectorSdfGrad> &sdf_grad_map);
       void publishRVIZTrajSweepOccupancy(const std::vector<int> &occupancy_map);
       void publishRVIZCostmap(const std::vector<float> &costmap);
-      void publishRVIZConeRankings();
-      void publishRVIZGroundOccupancy(const std::vector<bool> &occupancy_2d_map);
 
       // NBV
       void SetConeFlags(robot::JointValueMap robot_joints);
@@ -114,19 +118,26 @@ namespace gpu_voxels_ros{
       ros::NodeHandle node_;
       std::string transform_topic_, pcl_topic_, sensor_frame_, traj_pred_topic_;
       ros::Subscriber pcl_sub_, transform_sub_, traj_pred_sub_;  
-      ros::Publisher map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, cone_arrow_pub_, ground_occ_pub_;
-
-      RecoveryPlanner recovery_planner_;
+      ros::Publisher unclean_map_pub_, map_pub_, ground_sdf_pub_, ground_sdf_grad_pub_, update_time_pub_, cone_flag_pub_, traj_sweep_pub_, costmap_pub_, distance_field_2d_pub_, ground2dsdf_pub_;
 
       boost::shared_ptr<GpuVoxels> gvl_;
       boost::shared_ptr<DistanceVoxelMap> pbaDistanceVoxmap_, pbaInverseDistanceVoxmap_, pbaDistanceVoxmapVisual_;
       boost::shared_ptr<InheritSignedDistanceVoxelMap> signedDistanceMap_;
+      boost::shared_ptr<SignedDistanceVoxelMap> humanSignedDistanceMap_;
+      boost::shared_ptr<DistanceVoxelMap> distvoxelmap_2d_;
 
       // boost::shared_ptr<ProbVoxelMap> erodeTempVoxmap1_, erodeTempVoxmap2_, maintainedProbVoxmap_, robotVoxmap_, cleanVoxmap_;
       boost::shared_ptr<ProbVoxelMap> maintainedProbVoxmap_, robotVoxmap_, cleanVoxmap_, cleanVoxmapVisual_;
       // boost::shared_ptr<CountingVoxelList> countingVoxelList_, countingVoxelListFiltered_;
 
       boost::shared_ptr<gpu_voxels::robot::UrdfRobot> robot_ptr_;
+
+      Vector3ui human_dims_;
+      Vector3ui cylinder_base_corner_;
+      boost::shared_ptr<DistanceVoxelMap> human_shared_ptr_, human_inverse_shared_ptr_;
+      std::vector<std::shared_ptr<std::vector<float>>> composite_sdf_ptrs_;
+      std::vector<std::shared_ptr<std::vector<gpu_voxels::VectorSdfGrad>>> composite_sdf_grad_ptrs_;
+      size_t num_sdfs_;
 
       float voxel_side_length_; 
       bool new_data_received_;
@@ -150,12 +161,8 @@ namespace gpu_voxels_ros{
       float dalpha_ = 1.1*M_PI_4;
       float dtheta_ = 1.3*M_PI_4;
 
-      std::vector<float> pan_deltas_ = {-3.14, -2.0, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.14};
-      std::vector<float> tilt_deltas_ = {-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0};
-      std::vector<float> cone_costs_ = std::vector<float>(144);
-      robot::JointValueMap next_cone_robot_joints_;
 
-      float max_ray_length_ = 7; // Testing whether this helps clearing
+      float max_ray_length_ = 15; // Testing whether this helps clearing
 
 
       Matrix4f tf_;
@@ -174,8 +181,10 @@ namespace gpu_voxels_ros{
       std::vector<int> occupancy_map_;
       std::vector<int> traj_step_map_;
       std::vector<float> host_costmap_;
+      std::vector<float> host_2d_dist_;
+      std::vector<float> unclean_sdf_map_;
 
   };
 } // namespace
 
-#endif
+#endif //GPU_VOXELS_ROS_LIVE_COMPOSITE_SDF_H

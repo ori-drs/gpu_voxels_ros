@@ -6,7 +6,7 @@
 
   <maintainer email="mfinean@robots.ox.ac.uk">Mark Finean</maintainer>
 
-  <license>TODO</license>
+  <license>BSD-3-Clause</license>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>
@@ -15,17 +15,20 @@
   <build_depend>icl_core</build_depend>
   <build_depend>gpu_voxels</build_depend>
   <build_depend>PCL</build_depend>
+  <build_depend>ompl</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>icl_core</build_export_depend>
   <build_export_depend>gpu_voxels</build_export_depend>
   <build_export_depend>PCL</build_export_depend>
+  <build_export_depend>ompl</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>icl_core</exec_depend>
   <exec_depend>gpu_voxels</exec_depend>
   <exec_depend>PCL</exec_depend>
+  <exec_depend>ompl</exec_depend>
 
 
 
