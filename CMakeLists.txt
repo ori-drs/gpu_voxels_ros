@@ -31,7 +31,6 @@ src/composite_sdf_test.cpp
 src/live_composite_sdf.cpp
 src/single_composite_sdf.cpp
 src/utils.cpp
-# include/timing.h
 src/timing.cc
 src/RecoveryPlanner.cpp
 )
@@ -69,20 +68,6 @@ include_directories(
 add_definitions(
   ${icl_core_DEFINITIONS}
 )
-
-
-# add_executable (load_cow_and_lady_ptcloud src/load_cow_and_lady_ptcloud.cpp)
-# target_link_libraries (load_cow_and_lady_ptcloud
-#     ${Boost_SYSTEM_LIBRARY}
-#     ${icl_core_LIBRARIES}
-#     ${gpu_voxels_LIBRARIES}
-#     ${CUDA_LIBRARIES}
-#     ${PCL_LIBRARIES}
-#     ${CATKIN_LIBRARIES}
-#     ${orocos_kdl_LIBRARIES}
-#     ${roscpp_LIBRARIES}
-#     ${rospy_LIBRARIES}
-# )
 
 add_executable (sdf_test src/sdf_test.cpp)
 target_link_libraries (sdf_test
