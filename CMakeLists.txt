@@ -6,8 +6,8 @@ add_compile_options(-std=c++11 -D_BUILD_GVL_WITH_URDF_SUPPORT_ -D_IC_BUILDER_GPU
 
 # First we have to find our dependencies:
 FIND_PACKAGE(CUDA REQUIRED)
-FIND_PACKAGE(icl_core PATHS /home/mark/installs/gpu-voxels/export REQUIRED )
-FIND_PACKAGE(gpu_voxels PATHS /home/mark/installs/gpu-voxels/export REQUIRED)
+FIND_PACKAGE(icl_core PATHS /home/orion/installs/gpu-voxels/export REQUIRED )
+FIND_PACKAGE(gpu_voxels PATHS /home/orion/installs/gpu-voxels/export REQUIRED)
 FIND_PACKAGE(Boost COMPONENTS system REQUIRED)
 FIND_PACKAGE(PCL REQUIRED)
 FIND_PACKAGE(orocos_kdl REQUIRED)
@@ -29,6 +29,7 @@ add_library(gpu_voxels_ros
 src/gpu_voxels_hsr_server.cpp
 src/composite_sdf_test.cpp
 src/live_composite_sdf.cpp
+src/single_composite_sdf.cpp
 src/utils.cpp
 # include/timing.h
 src/timing.cc
