@@ -9,7 +9,7 @@ In particular we use the gpu_voxels_hsr_server, live_composite_sdf, and single_c
 
 ## Install Instructions
 -----
-This package can be built using catkin build within a catkin workspace. First, change PATH_TO_GPU_VOXELS in the CMakeLists.txt file to your installation directory of GPU-Voxels.
+This package can be built using catkin build within a catkin workspace. Please ensure that the environment variable GPU_VOXELS_INSTALL_DIR is set to your GPU-Voxels install directory.
 ## License
 -----
 While this repository is licensed under the BSD-3-Clause license, it uses two files which are licensed under Apache License, Version 2.0 (Copyright (C) 2012-2013 Simon Lynen, ASL, ETH Zurich, Switzerland and adapted from Paul Furgale Schweizer Messer)
